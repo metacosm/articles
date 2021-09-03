@@ -27,7 +27,7 @@ L'intérêt des opérateurs est donc d'étendre la plateforme Kubernetes en lui 
 
 ## Pourquoi écrire des opérateurs en Java?
 
-Kubernetes est écrit en Go [https://golang.org] et, traditionnellement, les opérateurs aussi. Il faut dire que ce langage de programmation est particulièrement adapté à cet exercice: assez facile à apprendre, c’est aussi un langage efficace à l'exécution, tant en termes de consommation de mémoire ou d’utilisation du processeur. D’autre part, il y a plusieurs projets en Go destinés à simplifier l’écriture d’opérateurs: `operator-sdk` [https://sdk.operatorframework.io/] et son outil en ligne de commande qui permet de démarrer plus rapidement, `client-go` [https://github.com/kubernetes/client-go/] qui permet d’interagir avec le serveur d’API de Kubernetes de manière programmatique tandis qu'`apimachinery` [https://github.com/kubernetes/apimachinery] et `controller-runtime` [https://http://github.com/kubernetes/controller-runtime]
+Kubernetes est écrit en Go [https://golang.org] et, traditionnellement, les opérateurs aussi. Il faut dire que ce langage de programmation est particulièrement adapté à cet exercice: assez facile à apprendre, c’est aussi un langage efficace à l'exécution, tant en termes de consommation de mémoire que d’utilisation du processeur. D’autre part, il y a plusieurs projets en Go destinés à simplifier l’écriture d’opérateurs: `operator-sdk` [https://sdk.operatorframework.io/] et son outil en ligne de commande qui permet de démarrer plus rapidement, `client-go` [https://github.com/kubernetes/client-go/] qui permet d’interagir avec le serveur d’API de Kubernetes de manière programmatique tandis qu'`apimachinery` [https://github.com/kubernetes/apimachinery] et `controller-runtime` [https://http://github.com/kubernetes/controller-runtime]
 fournissent des fonctions et des schémas utiles pour faciliter l’écriture d’opérateurs.
 
 Pourquoi alors utiliser Java? C’est le langage d’applications d’entreprise par excellence et ces applications, souvent complexes, bénéficieraient de mécanismes simplifiés pour les déployer sur Kubernetes. Par ailleurs, l’approche DevOps veut que les développeurs des applications soient aussi chargés de leur mise (et maintien) en production. Utiliser le même langage pour toutes les étapes du cycle de vie de l’application est donc une proposition attractive.
@@ -45,7 +45,7 @@ C'est à ce stade qu'intervient le projet Java Operator SDK (JOSDK [https://java
 Déployer une application sur Kubernetes nécessite la création de plusieurs ressources associées: il faut a minima créer un `Deployment` et un `Service` associé. Par ailleurs, il faut également créer un
 `Ingress` (ou une `Route` sur OpenShift) pour exposer l’application en dehors du cluster. Tout ceci n’est certes pas si compliqué mais pour un développeur qui n’a envie de se soucier que d’écrire son application et non pas des détails à mettre en œuvre pour la déployer sur le cluster, c’est une charge de travail supplémentaire. Automatiser le processus est donc intéressant.
 
-Bien évidemment, nous allons grandement simplifier ce cas d’utilisation en ne traitant que le cas particulier d’une application donnée (en l’occurrence, un simple `Hello World` écrit avec Quarkus) mais l’on pourrait imaginer de partir de ce concept pour développer un opérateur plus robuste et général à partir de ce simple scénario. Il faudrait, par exemple, être en mesure de déterminer quel port doit être exposé pour l’application en question. Dans notre cas, nous exposerons le port 8080 automatiquement.
+Bien évidemment, nous allons grandement simplifier ce cas d’utilisation en ne traitant que le cas particulier d’une application donnée (en l’occurrence, un simple `Hello World` écrit avec Quarkus) mais l’on pourrait imaginer de partir de ce concept pour développer un opérateur plus robuste et général à partir de ce simple scénario. Il faudrait, par exemple, indiquer à notre opérateur quel port doit être exposé pour l’application en question. Dans notre cas, nous exposerons le port 8080 automatiquement.
 
 Tout ceci étant posé, voici à quoi ressemblerait un exemple simple de notre `ExposedApp` CR:
 
@@ -68,11 +68,35 @@ Nous allons voir comment nous pouvons implémenter notre opérateur (ou plus sp�
 La commande à utiliser est:
 
 ```shell
-operator-sdk init --plugins quarkus --domain halkyon.io --project-name expose`
+> operator-sdk init --plugins quarkus --domain halkyon.io --project-name expose
+> Next: define a resource with:
+> $ operator-sdk create api
 ```
 
 Nous spécifions que nous voulons initialiser un projet avec le plugin `quarkus` en utilisant le nom de domaine
-`halkyon.io`, nom utilisé pour le groupe associé à notre CR et aux packages Java de notre projet. Le résultat de cette opération peut être vu à [https://github.com/halkyonio/exposedapp/tree/step-1]. À ce stade, notre projet ne fait pas grand chose à part mettre en place le code nécessaire pour créer une application Quarkus dans laquelle l’"operator" venant du SDK est injecté et démarré. Cependant, il n’existe pas encore de "controller" et le SDK nous le fait savoir:
+`halkyon.io`, nom utilisé pour le groupe associé à notre CR et aux packages Java de notre projet. `operator-sdk` génère les fichiers suivants:
+
+```shell
+.
+├── Makefile
+├── PROJECT
+├── pom.xml
+└── src
+    └── main
+        ├── java
+        └── resources
+            └── application.properties
+```
+
+Elle nous indique aussi, comme nous pouvons le voir sur la structure du projet, que nous avons encore du travail à faire! Le résultat de cette première étape peut être vu à [https://github.com/halkyonio/exposedapp/tree/step-1]. 
+
+Démarrons à présent Quarkus en utilisant le Dev mode afin de pouvoir développer notre opérateur alors qu'il tourne:
+
+```shell
+mvn quarkus:dev
+```
+
+À ce stade, notre projet ne fait pas grand chose à part mettre en place le code nécessaire pour créer une application Quarkus dans laquelle l’"operator" venant du SDK est injecté et démarré. Tout ceci est fait de manière transparente et nous n'avons pas encore écrit une seule ligne de code. De fait, comme `operator-sdk` nous l'indiquait plus tôt, il n’existe pas encore de "controller" et le SDK nous le fait savoir:
 
 ```shell
 ERROR [io.qua.run.Application] (Quarkus Main Thread) Failed to start application (with profile dev): io.javaoperatorsdk.operator.OperatorException: No ResourceController exists. Exiting!
@@ -83,14 +107,104 @@ ERROR [io.qua.run.Application] (Quarkus Main Thread) Failed to start application
 
 Ajoutons donc une implémentation de `ResourceController` et une classe pour représenter notre CR. JOSDK utilise le client Kubernetes Fabric8 [https://github.com/fabric8io/kubernetes-client] comme couche de communication avec le cluster. L’équipe du client a récemment amélioré le support des CRs de manière significative et nous allons pouvoir bénéficier de ces améliorations ici. Pour représenter une CR avec le JOSDK, il nous suffit d’étendre la classe `CustomResource`. De manière générale, il est recommandé, lors de la conception de CRs, de n’utiliser que deux champs composés (outre les champs traditionnels des ressources Kubernetes): `spec` et `status`. L’idée est de séparer proprement l’état spécifié par l’utilisateur et qui doit donc être sous son contrôle (la spécification ou `spec`) de l’état actuel de la ressource, communiqué à l’utilisateur, qui ne peut le modifier, par le controller et donc sous le contrôle de ce dernier: le `status`. Cette dichotomie est facilitée par la classe `CustomResource` qui est paramétrée par un type associé à la `spec` et un autre associé au `status`.
 
-Définir une CR revient à définir une API, un contrat avec le cluster. De ce fait, l’outil `operator-sdk` définit une commande `create-api` pour ajouter les classes requises à notre projet:
+Définir une CR revient à définir une API, un contrat avec le cluster. De ce fait, l’outil `operator-sdk` définit une commande `create api` pour ajouter les classes requises à notre projet:
 
 ```shell
 operator-sdk create api --version v1alpha1 --kind ExposedApp
 ```
 
 Cette commande crée quatre fichiers dans notre projet: une classe `ExposedApp` représentant notre CR en version `v1alpha1` et à laquelle sont associées une classe pour la `spec` et le `status`, respectivement: `ExposedAppSpec`
-et `ExposedAppStatus`. Un controller configuré pour prendre en charge notre CR est également créé: `ExposedAppController`. Le résultat de cette opération peut être examiné à [https://github.com/halkyonio/exposedapp/tree/step-2].
+et `ExposedAppStatus`. Un "controller" configuré pour prendre en charge notre CR est également créé: `ExposedAppController`. Le résultat de cette opération peut être examiné à [https://github.com/halkyonio/exposedapp/tree/step-2].
+
+Observons que Quarkus redémarre automatiquement l'application après ces changements et commence à travailler:
+
+```shell
+INFO [io.qua.ope.dep.OperatorSDKProcessor] (build-26) Registered 'io.halkyon.ExposedApp' for reflection
+INFO [io.qua.ope.dep.OperatorSDKProcessor] (build-26) Registered 'io.halkyon.ExposedAppSpec' for reflection
+INFO [io.qua.ope.dep.OperatorSDKProcessor] (build-26) Registered 'io.halkyon.ExposedAppStatus' for reflection
+...
+```
+
+Nous pouvons observer que les classes associées avec notre CR ont été enregistrées pour être accéder via la réflection de Java. Ceci est important pour que notre opérateur puisse fonctionner correctement après avoir été compilé nativement grâce au support du mode natif fourni par Quarkus. Sans l'extension, il aurait fallu d'une part savoir que ces classes nécessitent un accès réflectif mais également comment les enregistrer correctement auprès de GraalVM pour assurer un fonctionnement correct.
+                               
+Examinons à présent la classe qui a été générée pour notre CR `ExposedApp`:
+
+```java
+@Version("v1alpha1")
+@Group("halkyon.io")
+public class ExposedApp extends CustomResource<ExposedAppSpec, ExposedAppStatus> implements Namespaced {}
+```
+
+Comme nous allons le voir ensuite, cette class est au cœur de notre opérateur et de nombreuses informations sont automatiquement inférrées à partir du groupe et de la version spécifés par les annotations `@Group` et `@Version`, respectivement.
+
+
+```shell
+INFO [io.qua.ope.dep.OperatorSDKProcessor] (build-26) Processed 'io.halkyon.ExposedAppController' controller named 'exposedappcontroller' for 'exposedapps.halkyon.io' CR (version 'halkyon.io/v1alpha1')
+INFO [io.fab.crd.gen.CRDGenerator] (build-26) Generating 'exposedapps.halkyon.io' version 'v1alpha1' with io.halkyon.ExposedApp (spec: io.halkyon.ExposedAppSpec / status io.halkyon.ExposedAppStatus)...
+INFO [io.qua.ope.dep.OperatorSDKProcessor] (build-26) Generated exposedapps.halkyon.io CRD:
+INFO [io.qua.ope.dep.OperatorSDKProcessor] (build-26)   - v1 -> ... /target/kubernetes/exposedapps.halkyon.io-v1.yml
+```
+ 
+Le nom de notre CRD a été automatiquement généré à partir des informations de notre CR mais, de manière encore plus intéressante, nous pouvons voir qu'une CRD a également été créée automatiquement à partir de nos classes:
+
+```yaml
+# Generated by Fabric8 CRDGenerator, manual edits might get overwritten!
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: exposedapps.halkyon.io
+spec:
+  group: halkyon.io
+  names:
+    kind: ExposedApp
+    plural: exposedapps
+    singular: exposedapp
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            type: object
+          status:
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+```
+
+Bien évidemment, nos classes étant actuellement vide, notre CRD est très simple mais l'on se rend compte immédiatement, surtout quand on a déjà essayé d'écrire une CRD manuellement, de l'intérêt de pouvoir garder notre CRD synchronisée automatiquement avec les changements faits sur notre code.
+
+Malheureusement, notre opérateur a encore une erreur:       
+
+```shell
+ERROR [io.qua.run.Application] (Quarkus Main Thread) Failed to start application (with profile dev): io.javaoperatorsdk.operator.MissingCRDException: 'exposedapps.halkyon.io' v1 CRD was not found on the cluster, controller 'exposedappcontroller' cannot be registered
+```
+
+En effet, par défaut, JOSDK vérifie, avant de démarrer un "controller", que la CRD associée existe bien sur le cluster. Ce comportement peut être désactivé (et c'est d'ailleurs recommandé en production) mais c'est une information intéressante à avoir lors du développement car notre opérateur ne pourra pas fonctionner si la CRD associée n'a pas été déployée sur le cluster cible.
+
+Là encore, l'extension Quarkus nous vient en aide: d'une part, la CRD est automatiquement mise à jour quand une classe impactant sa génération change et seulement dans ce cas; mais, d'autre part, il est possible de demander à l'extension de déployer la CRD automatiquement sur le cluster quand elle change. Celà permet au développeur de ne pas avoir à interrompre son travail pour ré-appliquer la CRD.
+
+Ceci est contrôllé par la propriété `quarkus.operator-sdk.crd.apply` que l'on peut modifier dans `application.properties`:
+
+```properties
+# set to true to automatically apply CRDs to the cluster when they get regenerated
+quarkus.operator-sdk.crd.apply=false
+```
+
+Modifions donc le fichier pour mettre cette propriété à `true` et observons le résultat: Quarkus redémarre l'application et nous voyons:
+
+```shell
+INFO  [io.qua.dep.dev.RuntimeUpdatesProcessor] (pool-1-thread-1) Restarting quarkus due to changes in application.properties.
+...
+INFO  [io.qua.ope.run.OperatorProducer] (Quarkus Main Thread) Applied v1 CRD named 'exposedapps.halkyon.io' from ... /target/kubernetes/exposedapps.halkyon.io-v1.yml
+...
+```
+
+Et cette fois notre opérateur démarre correctement, une fois la CRD déployée sur le cluster!
 
 Nous pouvons voir que notre controller implémente l’interface `ResourceController` paramétrée par notre CR et est également annoté avec l’annotation `@Controller` qui permet de configurer certains aspects de son comportement par rapport au cluster. Nous pouvons, par exemple, spécifier sur quels namespaces le controller va écouter pour des évènements associés à notre CR. Par défaut, i.e. dans la configuration actuelle, le controller va écouter sur tous les namespaces. Nous allons, dans cet exemple, demander à notre controller de n’écouter que les événements associés au namespace dans lequel il sera déployé sur notre cluster en positionnant le champ `namespaces` de notre annotation `@Controller` à la valeur `Controller.WATCH_CURRENT_NAMESPACE`. Nous allons également renommer notre controller afin de pouvoir utiliser le configurer de manière externe (via le fichier `application.properties`, par exemple) plus simplement en positionnant le champ `name` de l’annotation à la
 valeur `exposedapp`.
