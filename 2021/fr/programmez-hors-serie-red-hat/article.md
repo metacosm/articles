@@ -420,3 +420,141 @@ Nous pouvons également vérifier que notre application est bien accessible en d
 ### Ajout d'un statut
 Notre application semble fonctionner correctement. Néanmoins, il serait intéressant de pouvoir connaître son état facilement.
 
+Ajoutons, pour ce faire, deux champs à notre classe `ExposedAppStatus`: 
+
+```java
+public class ExposedAppStatus {
+
+    private String host;
+    private String message;
+
+    public ExposedAppStatus(String message, String hostname) {
+        this.message = message;
+        this.host = hostname;
+    }
+
+    public String getHost() {
+        return host;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+...
+}
+```
+
+Ajoutons également la gestion du statut dans notre "controller":
+
+```java
+    // add status to resource
+    final var status = ingress.getStatus();
+    if (status != null) {
+        final var ingresses = status.getLoadBalancer().getIngress();
+        if (ingresses != null && !ingresses.isEmpty()) {
+            // only set the status if the ingress is ready to provide the info we need
+            final var url = "https://" + ingresses.get(0).getHostname();
+            log.info("App {} is exposed and ready to used at {}", name, url);
+            resource.setStatus(new ExposedAppStatus("exposed", url));
+            return UpdateControl.updateStatusSubResource(resource);
+        }
+    }
+
+    resource.setStatus(new ExposedAppStatus("processing", null));
+    return UpdateControl.updateStatusSubResource(resource);
+```
+
+Notre but est de récupérer le status de notre `Ingress` et de récupérer le nom de l'hôte associé à l'`Ingress`. Si son statut existe, nous extrayons l'information pour mettre à jour le statut de notre CR avec avec le stade "exposed", sinon nous indiquons que notre CR est encore au stade "processing" dans son statut. Notons également que nous retournons `UpdateControl.updateStatusSubResource(resource)` pour indiquer à JOSDK que notre CR a vu son statut modifié et qu'il doit faire le nécessaire vis-à-vis du cluster. Nous ajoutons également du logging pour être informé quand l'application est exposée.
+
+Détruisons notre CR et recréons là pour observer le résultat. Nous avons beau attendre, le logging ne nous indique jamais que l'application est exposée. De même, si nous examinons notre CR, nous voyons le résultat suivant:
+
+```shell
+kubectl describe exposedapps.halkyon.io hello-quarkus
+
+Name:         hello-quarkus
+Namespace:    default
+...
+Status:
+  Message:  processing
+...
+```
+
+Pourtant, si nous attendons suffisamment longtemps (quelques dizaines de secondes en général), notre application est bien disponible mais il ne semble pas que notre "controller" soit appelé pour mettre à jour le statut. Ceci est en fait compréhensible: notre "controller" n'est appelé que pour des évènements concernant les CR `ExposedApp`; or, dans notre cas, nous voudrions que notre "controller" soit appelé quand l'`Ingress` que nous avons créé est mis à jour.
+
+Nous pouvons faire ceci avec JOSDK grâce au concept d'`EventSource` qui représente une source d'évènements associés à un type de CR donné. Notre notre cas, nous voulons écouter les évènements affectant les `Ingress` avec le "label" correspondant à notre application. En créant une telle source, et en l'enregistrant auprès de notre "controller" via la méthode `init`, JOSDK appelera également notre "controller" dans ce cas.
+
+Ajoutons donc une implémentation d'`EventSource` à notre application. Nous allons utiliser un `Watcher` pour écouter les évènements de type `Ingress` et ensuite émettre un nouvel évènement de type `IngressEvent` que nous demanderons au JOSDK de prendre en compte via son `EventHandler`. Pour nous faciliter la tâche, nous étendrons la classe `AbstractEventSource` fournie par le SDK:
+
+```java
+public class IngressEventSource extends AbstractEventSource implements Watcher<Ingress> {
+    private final KubernetesClient client;
+
+    private IngressEventSource(KubernetesClient client) {
+        this.client = client;
+    }
+
+    public static IngressEventSource create(KubernetesClient client) {
+        final var eventSource = new IngressEventSource(client);
+        client.network().v1().ingresses().withLabel(ExposedAppController.APP_LABEL).watch(eventSource);
+        return eventSource;
+    }
+
+    @Override
+    public void eventReceived(Action action, Ingress ingress) {
+        final var uid = ingress.getMetadata().getOwnerReferences().get(0).getUid();
+        final var status = ingress.getStatus();
+        if (status != null) {
+            final var ingressStatus = status.getLoadBalancer().getIngress();
+            if (!ingressStatus.isEmpty()) {
+                eventHandler.handleEvent(new IngressEvent(uid, this));
+            }
+        }
+    }
+    
+    ...
+}
+```
+ 
+Nous associons ensuite notre `EventSource` à notre "controller" en implémentant sa méthode `init`:
+
+```java
+public void init(EventSourceManager eventSourceManager) {
+    eventSourceManager.registerEventSource("exposedapp-ingress-watcher", IngressEventSource.create(client));
+}
+```
+
+Détruisons encore une fois notre CR et ajoutons là à nouveau:
+
+```shell
+[io.hal.ExposedAppController] (EventHandler-exposedapp) Exposing hello-quarkus application from image localhost:5000/quarkus/hello
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Deployment hello-quarkus handled
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Service hello-quarkus handled
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Ingress hello-quarkus handled
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Exposing hello-quarkus application from image localhost:5000/quarkus/hello
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Deployment hello-quarkus handled
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Service hello-quarkus handled
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Ingress hello-quarkus handled
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) App hello-quarkus is exposed and ready to used at https://localhost
+```
+
+Nous voyons donc que notre "controller" est appelé une première fois lorsque notre CR est créé puis, contrairement à précédemment, appelé une second fois lorsque l'`Ingress` change de statut et nous avons bien le "logging" que nous espérions. 
+
+De même si nous examinons notre CR, nous pouvons constater que son statut a bien été mis à jour:
+
+```shell
+kubectl describe exposedapps.halkyon.io hello-quarkus
+
+Name:         hello-quarkus
+Namespace:    default
+...
+Status:
+  Host:     https://localhost
+  Message:  exposed
+...
+```
+
+## Conclusion
+
+Ainsi se termine notre briève introduction au monde des opérateurs écrits en Java. Nous avons vu comment JOSDK et son extension simplifie la tâche tout en rendant possible d'itérer sur le code de l'opérateur efficacement alors que ce dernier tourne.
+
+Le code complet de notre opérateur est disponible à [https://github.com/halkyonio/exposedapp].
