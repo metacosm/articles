@@ -142,7 +142,7 @@ Comme nous allons le voir ensuite, cette class est au cœur de notre opérateur 
 INFO [io.qua.ope.dep.OperatorSDKProcessor] (build-26) Processed 'io.halkyon.ExposedAppController' controller named 'exposedappcontroller' for 'exposedapps.halkyon.io' CR (version 'halkyon.io/v1alpha1')
 INFO [io.fab.crd.gen.CRDGenerator] (build-26) Generating 'exposedapps.halkyon.io' version 'v1alpha1' with io.halkyon.ExposedApp (spec: io.halkyon.ExposedAppSpec / status io.halkyon.ExposedAppStatus)...
 INFO [io.qua.ope.dep.OperatorSDKProcessor] (build-26) Generated exposedapps.halkyon.io CRD:
-INFO [io.qua.ope.dep.OperatorSDKProcessor] (build-26)   - v1 -> ... /target/kubernetes/exposedapps.halkyon.io-v1.yml
+INFO [io.qua.ope.dep.OperatorSDKProcessor] (build-26)   - v1 -> <path absolu de notre app>/target/kubernetes/exposedapps.halkyon.io-v1.yml
 ```
  
 Le nom de notre CRD a été automatiquement généré à partir des informations de notre CR mais, de manière encore plus intéressante, nous pouvons voir qu'une CRD a également été créée automatiquement à partir de nos classes:
@@ -186,9 +186,15 @@ ERROR [io.qua.run.Application] (Quarkus Main Thread) Failed to start application
 
 En effet, par défaut, JOSDK vérifie, avant de démarrer un "controller", que la CRD associée existe bien sur le cluster. Ce comportement peut être désactivé (et c'est d'ailleurs recommandé en production) mais c'est une information intéressante à avoir lors du développement car notre opérateur ne pourra pas fonctionner si la CRD associée n'a pas été déployée sur le cluster cible.
 
-Là encore, l'extension Quarkus nous vient en aide: d'une part, la CRD est automatiquement mise à jour quand une classe impactant sa génération change et seulement dans ce cas; mais, d'autre part, il est possible de demander à l'extension de déployer la CRD automatiquement sur le cluster quand elle change. Celà permet au développeur de ne pas avoir à interrompre son travail pour ré-appliquer la CRD.
+Nous pourrions certes appliquer notre CRD sur notre cluster manuellement en utilisant `kubectl` et en lui passant le fichier qui a été généré:
 
-Ceci est contrôllé par la propriété `quarkus.operator-sdk.crd.apply` que l'on peut modifier dans `application.properties`:
+```shell
+kubectl apply -f target/kubernetes/exposedapps.halkyon.io-v1.yml
+```
+
+Néanmoins, nous aimerions pouvoir concevoir notre CR de manière interactive en utilisant la fonction de Live Coding du Dev Mode de Quarkus pour ce faire: nous ferions un changement sur notre CR, l’extension régénèrerait la CRD et l’appliquerait automatiquement sur le cluster, nous permettant ainsi de nous concentrer sur notre code!
+
+Là encore, l'extension Quarkus nous vient en aide: il est effectivement possible de demander à l'extension de déployer la CRD automatiquement sur le cluster quand elle change via la propriété `quarkus.operator-sdk.crd.apply` que l'on peut modifier dans `application.properties`:
 
 ```properties
 # set to true to automatically apply CRDs to the cluster when they get regenerated
@@ -200,14 +206,57 @@ Modifions donc le fichier pour mettre cette propriété à `true` et observons l
 ```shell
 INFO  [io.qua.dep.dev.RuntimeUpdatesProcessor] (pool-1-thread-1) Restarting quarkus due to changes in application.properties.
 ...
-INFO  [io.qua.ope.run.OperatorProducer] (Quarkus Main Thread) Applied v1 CRD named 'exposedapps.halkyon.io' from ... /target/kubernetes/exposedapps.halkyon.io-v1.yml
+INFO  [io.qua.ope.run.OperatorProducer] (Quarkus Main Thread) Applied v1 CRD named 'exposedapps.halkyon.io' from <path absolu de notre app>/target/kubernetes/exposedapps.halkyon.io-v1.yml
 ...
 ```
 
-Et cette fois notre opérateur démarre correctement, une fois la CRD déployée sur le cluster!
+Cette fois notre opérateur démarre correctement, une fois la CRD déployée sur le cluster! Grâce à ce mode de fonctionnement, nous allons pouvoir progressivement enrichir le modèle de notre CR sans avoir à redémarrer notre "operator" ou même quitter notre IDE.
+                                                                                            
+En examinant les logs du démarrage nous pouvons voir:
 
-Nous pouvons voir que notre controller implémente l’interface `ResourceController` paramétrée par notre CR et est également annoté avec l’annotation `@Controller` qui permet de configurer certains aspects de son comportement par rapport au cluster. Nous pouvons, par exemple, spécifier sur quels namespaces le controller va écouter pour des évènements associés à notre CR. Par défaut, i.e. dans la configuration actuelle, le controller va écouter sur tous les namespaces. Nous allons, dans cet exemple, demander à notre controller de n’écouter que les événements associés au namespace dans lequel il sera déployé sur notre cluster en positionnant le champ `namespaces` de notre annotation `@Controller` à la valeur `Controller.WATCH_CURRENT_NAMESPACE`. Nous allons également renommer notre controller afin de pouvoir utiliser le configurer de manière externe (via le fichier `application.properties`, par exemple) plus simplement en positionnant le champ `name` de l’annotation à la
-valeur `exposedapp`.
+```shell
+INFO  [io.jav.ope.Operator] (Quarkus Main Thread) Registered Controller: 'exposedappcontroller' for CRD: 'class io.halkyon.ExposedApp' for namespace(s): [all namespaces]
+```
+
+`exposedappcontroller` est le nom de notre "controller" et nous voyons qu'il est enregistré pour tous les "namespaces" du cluster, c'est à dire qu'il recevra tout évènement associé avec notre CR, peu importe le "namespace" dans lequel cet évènement se produit.
+
+Ce comportement n'est pas forcément désirable mais, comme nous allons le voir, nous pouvons contrôler la configuration par différents moyens. Examinons à présent notre "controller":
+
+```java
+@Controller
+public class ExposedAppController implements ResourceController<ExposedApp> {
+
+    private final KubernetesClient client;
+
+    public ExposedAppController(KubernetesClient client) {
+        this.client = client;
+    }
+
+    // TODO Fill in the rest of the controller
+
+    @Override
+    public void init(EventSourceManager eventSourceManager) {
+        // TODO: fill in init
+    }
+
+    @Override
+    public UpdateControl<ExposedApp> createOrUpdateResource(
+        ExposedApp resource, Context<ExposedApp> context) {
+        // TODO: fill in logic
+
+        return UpdateControl.noUpdate();
+    }
+}
+```
+
+Il implémente l’interface `ResourceController` paramétrée par notre CR `ExposedApp` et est également annoté avec l’annotation `@Controller`. Cette annotation est un des moyens de configurer le comportement du "controller" par rapport au cluster. Nous pouvons, par exemple, spécifier sur quels namespaces le controller va écouter pour des évènements associés à notre CR. Par défaut, i.e. dans la configuration actuelle, le controller va écouter sur tous les namespaces.
+
+Configurons notre "controller" pour n’écouter que les événements associés au namespace dans lequel il sera déployé sur notre cluster en positionnant le champ `namespaces` de notre annotation `@Controller` à la valeur `Controller.WATCH_CURRENT_NAMESPACE`. Nous allons également renommer notre controller afin de pouvoir utiliser le configurer de manière externe (via le fichier `application.properties`, par exemple) plus simplement en positionnant le champ `name` de l’annotation à la valeur `exposedapp`.
+
+```java
+@Controller(namespaces = Controller.WATCH_CURRENT_NAMESPACE, name = "exposedapp")
+public class ExposedAppController implements ResourceController<ExposedApp> { ... }
+```
 
 Essayons à présent notre "controller" en utilisant le Dev Mode de Quarkus: nous rencontrons une erreur!
 
@@ -219,29 +268,13 @@ io.javaoperatorsdk.operator.MissingCRDException: 'exposedapps.halkyon.io' v1 CRD
 controller 'exposedapp' cannot be registered`
 ```
 
-Cette erreur est compréhensible: pour pouvoir utiliser notre nouvelle API, il faut la faire connaître à notre cluster en déployant une Custom Resource Definition (CRD) expliquant la structure et les paramètres de notre CR. Créer une CRD à partir de zéro n’est cependant pas un exercice facile. Pas de problèmes, cependant, l’extension quarkus-operator-sdk se charge de générer notre CRD pour nous, ainsi que l’on peut s’en rendre compte en regardant les logs du démarrage de notre application. Nous voyons ainsi deux lignes similaires à:
+Notre extension redémarre notre opérateur et nous voyons que la configuration a bien été prise en compte:
 
 ```shell
-Generated exposedapps.halkyon.io CRD:
-
-- v1 -> <path absolu de notre app>/target/kubernetes/exposedapps.halkyon.io-v1.yml
+INFO  [io.jav.ope.Operator] (Quarkus Main Thread) Registered Controller: 'exposedapp' for CRD: 'class io.halkyon.ExposedApp' for namespace(s): [default]
 ```
 
-Nous pourrions certes appliquer notre CRD sur notre cluster manuellement en utilisant `kubectl`:
-`kubectl apply -f target/kubernetes/exposedapps.halkyon.io-v1.yml`
-
-Nous pouvons cependant configurer l’extension `quarkus-operator-sdk` pour nous aider dans cette opération. Nous allons concevoir notre CR de manière interactive et il serait intéressant de pouvoir utiliser la fonction de Live Coding du Dev Mode de Quarkus pour ce faire: nous faisons un changement sur notre CR, l’extension régénère la CRD et l’applique automatiquement sur le cluster, nous permettant ainsi de nous concentrer sur notre code!
-
-Pour se faire, il suffit d’ajouter la propriété suivante au fichier `src/main/resources/application.properties`:
-
-```properties
-quarkus.operator-sdk.crd.apply=true
-```
-
-Le Dev Mode de Quarkus devrait automatiquement redémarrer notre application une fois le changement effectué sur le fichier. Nous pouvons alors constater que la CRD est appliquée automatiquement sur le cluster et que notre "controller"
-est correctement enregistré auprès de l’"operator". Grâce à ce mode de fonctionnement, nous allons pouvoir progressivement enrichir le modèle de notre CR sans avoir à redémarrer notre "operator" ou même quitter notre IDE.
-
-Commençons à présent à enrichir notre CR en ajoutant un champ `imageRef` de type String dans la spec de notre CR pour indiquer quelle application nous voulons exposer via notre operator. Nous pouvons voir dans les logs de notre application que la CRD est régénérée et appliquée sur le cluster vu qu’une classe affectant son contenu a été changée. Le code résultant peut être vu à [https://github.com/halkyonio/exposedapp/tree/step-5].
+Commençons à présent à enrichir notre CR en ajoutant un champ `imageRef` de type String dans la spec de notre CR pour indiquer quelle application nous voulons exposer via notre operator. Nous pouvons voir dans les logs de notre application que la CRD est régénérée et appliquée sur le cluster vu qu’une classe affectant son contenu a été changé.
 
 Il nous faut maintenant ajouter la logique de notre controller. Lorsqu’une CR `ExposedApp` est créée, nous devons créer un `Deployment`, un `Service` et un `Ingress`. Chacune de ces ressources sera créée avec un label `app.kubernetes.io/name` dont la valeur sera le nom de notre CR pour pouvoir les associer à notre ressource principale.
 
