@@ -106,7 +106,9 @@ ERROR [io.qua.run.Application] (Quarkus Main Thread) Failed to start application
 ```
 
 Ajoutons donc une implémentation de `ResourceController` et une classe pour représenter notre CR. JOSDK utilise le client Kubernetes Fabric8 [https://github.com/fabric8io/kubernetes-client] comme couche de communication avec le cluster. L’équipe du client a récemment amélioré le support des CRs de manière significative et nous allons pouvoir bénéficier de ces améliorations ici. Pour représenter une CR avec le JOSDK, il nous suffit d’étendre la classe `CustomResource`. De manière générale, il est recommandé, lors de la conception de CRs, de n’utiliser que deux champs composés (outre les champs traditionnels des ressources Kubernetes): `spec` et `status`. L’idée est de séparer proprement l’état spécifié par l’utilisateur et qui doit donc être sous son contrôle (la spécification ou `spec`) de l’état actuel de la ressource, communiqué à l’utilisateur, qui ne peut le modifier, par le controller et donc sous le contrôle de ce dernier: le `status`. Cette dichotomie est facilitée par la classe `CustomResource` qui est paramétrée par un type associé à la `spec` et un autre associé au `status`.
+     
 
+### Définition itérative de notre CR
 Définir une CR revient à définir une API, un contrat avec le cluster. De ce fait, l’outil `operator-sdk` définit une commande `create api` pour ajouter les classes requises à notre projet:
 
 ```shell
@@ -211,7 +213,10 @@ INFO  [io.qua.ope.run.OperatorProducer] (Quarkus Main Thread) Applied v1 CRD nam
 ```
 
 Cette fois notre opérateur démarre correctement, une fois la CRD déployée sur le cluster! Grâce à ce mode de fonctionnement, nous allons pouvoir progressivement enrichir le modèle de notre CR sans avoir à redémarrer notre "operator" ou même quitter notre IDE.
-                                                                                            
+
+Ajoutons à présent un champ `imageRef` de type String dans la "spec" de notre CR pour indiquer quelle application nous voulons exposer via notre operator. Nous pouvons voir dans les logs de notre application que la CRD est régénérée et appliquée sur le cluster vu qu’une classe affectant son contenu a été changé.
+              
+### Configuration du "controller"
 En examinant les logs du démarrage nous pouvons voir:
 
 ```shell
@@ -220,33 +225,11 @@ INFO  [io.jav.ope.Operator] (Quarkus Main Thread) Registered Controller: 'expose
 
 `exposedappcontroller` est le nom de notre "controller" et nous voyons qu'il est enregistré pour tous les "namespaces" du cluster, c'est à dire qu'il recevra tout évènement associé avec notre CR, peu importe le "namespace" dans lequel cet évènement se produit.
 
-Ce comportement n'est pas forcément désirable mais, comme nous allons le voir, nous pouvons contrôler la configuration par différents moyens. Examinons à présent notre "controller":
+Ce comportement n'est pas forcément désirable mais, comme nous allons le voir, nous pouvons contrôler la configuration par différents moyens. Examinons à présent la signature de notre "controller":
 
 ```java
 @Controller
-public class ExposedAppController implements ResourceController<ExposedApp> {
-
-    private final KubernetesClient client;
-
-    public ExposedAppController(KubernetesClient client) {
-        this.client = client;
-    }
-
-    // TODO Fill in the rest of the controller
-
-    @Override
-    public void init(EventSourceManager eventSourceManager) {
-        // TODO: fill in init
-    }
-
-    @Override
-    public UpdateControl<ExposedApp> createOrUpdateResource(
-        ExposedApp resource, Context<ExposedApp> context) {
-        // TODO: fill in logic
-
-        return UpdateControl.noUpdate();
-    }
-}
+public class ExposedAppController implements ResourceController<ExposedApp> { ... }
 ```
 
 Il implémente l’interface `ResourceController` paramétrée par notre CR `ExposedApp` et est également annoté avec l’annotation `@Controller`. Cette annotation est un des moyens de configurer le comportement du "controller" par rapport au cluster. Nous pouvons, par exemple, spécifier sur quels namespaces le controller va écouter pour des évènements associés à notre CR. Par défaut, i.e. dans la configuration actuelle, le controller va écouter sur tous les namespaces.
@@ -258,31 +241,52 @@ Configurons notre "controller" pour n’écouter que les événements associés 
 public class ExposedAppController implements ResourceController<ExposedApp> { ... }
 ```
 
-Essayons à présent notre "controller" en utilisant le Dev Mode de Quarkus: nous rencontrons une erreur!
-
-```shell
-mvn quarkus:dev
-... 
-ERROR [io.qua.run.Application] (Quarkus Main Thread) Failed to start application (with profile dev):
-io.javaoperatorsdk.operator.MissingCRDException: 'exposedapps.halkyon.io' v1 CRD was not found on the cluster,
-controller 'exposedapp' cannot be registered`
-```
-
 Notre extension redémarre notre opérateur et nous voyons que la configuration a bien été prise en compte:
 
 ```shell
 INFO  [io.jav.ope.Operator] (Quarkus Main Thread) Registered Controller: 'exposedapp' for CRD: 'class io.halkyon.ExposedApp' for namespace(s): [default]
 ```
+                                 
+### Implémentation de la logique de réconciliation
+Il nous faut maintenant ajouter la logique de notre controller. Lorsqu’une CR `ExposedApp` est créée, nous devons créer un `Deployment`, un `Service` et un `Ingress`. Chacune de ces ressources sera créée avec un "label" `app.kubernetes.io/name` dont la valeur sera le nom de notre CR. Ceci nous permettra de pouvoir récupérer toutes les ressources associées à notre ressource principale.
 
-Commençons à présent à enrichir notre CR en ajoutant un champ `imageRef` de type String dans la spec de notre CR pour indiquer quelle application nous voulons exposer via notre operator. Nous pouvons voir dans les logs de notre application que la CRD est régénérée et appliquée sur le cluster vu qu’une classe affectant son contenu a été changé.
+Cependant, nous voulons pouvoir lier explicitement chacune de ces ressources secondaires à notre ressource principale afin que leur cycles de vie soient liés. Kubernetes implémente ce comportement grâce au mécanisme d’ “Owner Reference”. Cela permet par exemple de détruire toutes les ressources associées automatiquement quand la ressource primaire est détruire: c’est exactement ce que l’on veut dans notre cas car l’on suppose que si l’on détruit notre CR, on ne veut plus exposer notre application et il serait pénible de traquer et manuellement détruire toutes les ressources que notre "controller" crée. Nous ajouterons, par conséquent, une "Owner Reference" au champ `metadata` de nos ressources secondaires.
+                                    
+Examinons notre "controller":
 
-Il nous faut maintenant ajouter la logique de notre controller. Lorsqu’une CR `ExposedApp` est créée, nous devons créer un `Deployment`, un `Service` et un `Ingress`. Chacune de ces ressources sera créée avec un label `app.kubernetes.io/name` dont la valeur sera le nom de notre CR pour pouvoir les associer à notre ressource principale.
+```java
+@Controller(namespaces = Controller.WATCH_CURRENT_NAMESPACE, name = "exposedapp")
+public class ExposedAppController implements ResourceController<ExposedApp> {
 
-Par ailleurs, il est intéressant de pouvoir lier plus explicitement nos ressources secondaires (`Deployment`, `Service`
-, `Ingress` qui dépendent de l’existence de notre CR) à notre ressource principale, `ExposedApp` grâce au concept d’ “Owner Reference”. Ce concept permet d’indiquer qu’une ressource donnée “possède” une autre ressource et que leur cycle de vie est lié. Cela permet par exemple de détruire toutes les ressources associées automatiquement quand la ressource primaire est détruire: c’est exactement ce que l’on veut dans notre cas car l’on suppose que si l’on détruit notre CR, on ne veut plus exposer notre application et il serait pénible de traquer et manuellement détruire toutes les ressources que notre "controller" crée. Nous ajouterons, par conséquent, une "Owner Reference" au champ `metadata` de nos ressources secondaires.
+    private final KubernetesClient client;
 
-Pour créer nos ressources, nous appelons les méthodes qui nous permettent d’interagir avec le serveur d’API du cluster pour un type de ressource donné via le client Kubernetes fourni par le projet Fabric8 [https://github.com/fabric8io/kubernetes-client] qui est injecté automatiquement dans notre controller par l’extension `quarkus-operator-sdk`. Le schéma suivi par le client est de définir des méthodes correspondant aux groupes d’APIs définies par Kubernetes. Par exemple, pour interagir avec les `Deployments` qui sont définis dans le groupe `apps`, nous appelons `client.apps().deployments()`. Pour interagir avec les CRDs en version v1, définies dans le groupe `apiextensions.k8s.io`, nous appelons `client.apiextensions().v1().customResourceDefinitions()`, etc. Les ressources sont créés en suivant un style de programmtion "
-Fluent" [https://java-design-patterns.com/patterns/fluentinterface/].
+    public ExposedAppController(KubernetesClient client) {
+        this.client = client;
+    }
+...
+}
+```
+
+Nous voyons que notre classe possède un champ de type `KubernetesClient`. Il s'agit d'une instance du client Kubernetes fourni par le projet Fabric8 [https://github.com/fabric8io/kubernetes-client]. L’extension `quarkus-operator-sdk` l'injecte automatiquement dans notre controller.
+  
+Ce client fourni ce que l'on appelle une API "Fluent" [https://java-design-patterns.com/patterns/fluentinterface/] pour interagir avec le server d'API de Kubernetes. À chaque groupe d'API Kubernetes correspond une interface spécifique permettant aux utilisateurs d'interagir avec l'API de manière guidée. 
+
+Par exemple, pour interagir avec les `Deployments` qui sont définis dans le groupe `apps`, nous appelons `client.apps().deployments()`. Pour interagir avec les CRDs en version v1, définies dans le groupe `apiextensions.k8s.io`, nous appelons `client.apiextensions().v1().customResourceDefinitions()`, etc.
+                                                                                                      
+Ce client va nous être utile pour implémenter le cœur de notre "controller": que doit-il se passer quand une ressource de type `ExposedApp` est créée sur le cluster? Si nous n'utilisions pas JOSDK, nous devrions manuellement créer un `Watcher` ou un `Informer` et s'occuper de gérer les évènements bas niveau. Heureusement, JOSDK fournit des abstractions de plus haut niveau et nous n'avons besoin que d'implémenter la méthode `createOrUpdateResource` dans la plupart des cas simples:
+
+```java
+    public UpdateControl<ExposedApp> createOrUpdateResource(
+        ExposedApp resource, Context<ExposedApp> context) {
+        // TODO: fill in logic
+
+        return UpdateControl.noUpdate();
+    }
+```
+
+Cette méthode est appelée automatiquement à chaque fois qu'une ressource de type `ExposedApp` est créée ou modifiée sur notre cluster, uniquement pour les ressources concernant les "namespaces" que notre "controller" est configuré pour surveiller. Notre "controller" reçoit la représentation de la ressource qui a causé l'évènement sous-jacent sans avoir à se soucier des détails. Ignorons pour l'instant le second paramètre qui n'est utile que pour des cas plus compliqués. 
+
+Notre "controller" doit donc implémenter cette méthode. Dans notre cas, il s'agit de créer un `Deployment`, un `Service` et un `Ingress`.
 
 Voici donc le code pour créer notre `Deployment` associé à notre CR `resource` qui nous est automatiquement fourni par le SDK:
 
@@ -310,7 +314,7 @@ final var deployment = client.apps().deployments().createOrReplace(new Deploymen
 .build());
 ```
 
-Une fois le client spécifique aux `Deployments` récupéré, nous appelons `createOrReplace` en construisant une nouvelle instance via un `DeploymentBuilder` qui nous fournit un DSL facile à utiliser. La méthode `createMetadata` se charge de positionner les étiquettes ainsi que l’Owner Reference dont nous avons parlé plus tôt. Nous voyons donc que la référence d’image `imageRef` Docker qui est extraite de notre CR et utilisée pour créer une template de pod avec un container utilisant cette image et le port 8080 exposé.
+Une fois le client spécifique aux `Deployments` récupéré, nous appelons `createOrReplace` en construisant une nouvelle instance via un `DeploymentBuilder` qui nous fournit un DSL facile à utiliser. La méthode `createMetadata` se charge de positionner les étiquettes ainsi que l’"Owner Reference" dont nous avons parlé plus tôt. Nous voyons donc que la référence d’image `imageRef` Docker qui est extraite de notre CR et utilisée pour créer une template de pod avec un container utilisant cette image et le port 8080 exposé.
 
 Nous créons de manière similaire notre `Service`:
 
@@ -356,9 +360,13 @@ final var ingress = client.network().v1().ingresses().createOrReplace(new Ingres
 .build());
 ```
 
-Le cas de l’`Ingress` est un peu plus compliqué car il dépend du fait qu’un "controller" NGINX soit installé et est configuré spécifiquement pour ce "controller" via les annotations. Nous ne rentrerons pas dans les détails de la configuration ici mais nous réfererons plutôt à la documentation officielle: [https://kubernetes.io/fr/docs/concepts/services-networking/ingress/]
+Le cas de l’`Ingress` est un peu plus compliqué car il dépend du fait qu’un "controller" NGINX soit installé. L'`Ingress` que nous créons est configuré spécifiquement pour le "controller" NGINX via les annotations. Nous ne rentrerons pas dans les détails de la configuration ici mais nous réfererons plutôt à la documentation officielle: [https://kubernetes.io/fr/docs/concepts/services-networking/ingress/]
 
-Le code complété pour notre controller peut être vu à [https://github.com/halkyonio/exposedapp/tree/step-6].
+Intéressons-nous maintenant à la valeur de retour de notre méthode. Nous devons retourner un objet de type `UpdateControl` mais qu'est-ce donc? Il s'agit ici d'indiquer à JOSDK ce qu'il doit ensuite faire: est-ce que notre CR ou son statut ont été modifiés? Ou, au contraire, n'y a-t-il eu aucune mise à jour de notre ressource principale? Cela permet à JOSDK de faire les appels nécessaires à l'API Kubernetes pour mettre à jour les ressources sur le cluster si besoin est. Cela lui permet aussi de maintenir l'état interne à jour.
+
+Dans notre cas, notre ressource principale n'a pas été modifiée et nous n'avons pas de statut, donc nous pouvons simplement retourner `UpdateControl.noUpdate()`. Nous ajoutons également le logging d'un minimum d'information afin de pouvoir voir sur notre console ce qu'il se passe et nous devrions avoir fini.
+
+Le code complété pour notre controller peut être vu à [https://github.com/halkyonio/exposedapp/tree/step-4].
 
 Créons à présent une ressource de type `ExposedApp`:
 
@@ -367,21 +375,21 @@ apiVersion: "halkyon.io/v1alpha1"
 kind: ExposedApp
 metadata:
   name: hello-quarkus
-  spec:
-    imageRef: localhost:5000/quarkus/hello
+spec:
+  imageRef: localhost:5000/quarkus/hello
 ```
 
 Si notre cluster est correctement configuré, nous devrions voir quelque chose de similaire à:
 
 ```shell
-2021-08-03 20:59:35,417 INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Exposing hello-quarkus application
-from image localhost:5000/quarkus/hello 2021-08-03 20:59:35,933 INFO  [io.hal.ExposedAppController] (
-EventHandler-exposedapp) Deployment hello-quarkus handled 2021-08-03 20:59:36,104 INFO  [io.hal.ExposedAppController] (
-EventHandler-exposedapp) Service hello-quarkus handled 2021-08-03 20:59:36,312 INFO  [io.hal.ExposedAppController] (
-EventHandler-exposedapp) Ingress hello-quarkus handled
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Exposing hello-quarkus application
+from image localhost:5000/quarkus/hello
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Deployment hello-quarkus handled
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Service hello-quarkus handled
+INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Ingress hello-quarkus handled
 ```
 
-Et, effectivement, nous pouvons voir que plusieurs ressources ont été créées sur notre namespace:
+Et, effectivement, nous pouvons voir que plusieurs ressources ont été créées dans notre "namespace":
 
 ```shell
 kubectl get all -l app.kubernetes.io/name=hello-quarkus
@@ -409,5 +417,6 @@ hello-quarkus <none>  *     localhost 80    9m40s
 
 Nous pouvons également vérifier que notre application est bien accessible en dehors du cluster en ouvrant [http://localhost/hello] sur un navigateur.
 
-Notre application semble fonctionner correctement. Néanmoins, il serait intéressant de pouvoir connaître son état facilement. Ajoutons-lui un statut!
+### Ajout d'un statut
+Notre application semble fonctionner correctement. Néanmoins, il serait intéressant de pouvoir connaître son état facilement.
 
