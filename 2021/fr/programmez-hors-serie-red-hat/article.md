@@ -578,6 +578,6 @@ Status:
 
 ## Conclusion
 
-Ainsi se termine notre brève introduction au monde des opérateurs écrits en Java. Nous avons vu comment JOSDK et son extension simplifie la tâche tout en rendant possible d'itérer sur le code de l'opérateur efficacement alors que ce dernier tourne.
+Ainsi se termine notre brève introduction au monde des opérateurs écrits en Java. Nous avons vu comment il est possible d'étendre Kubernetes en lui ajoutant de nouvelles APIs via la création de "Custom Resources" et leur CRDs associées. Nous avons également vu comment JOSDK et son extension simplifie l'implémentation des "controllers" prenant en charge nos CRs tout en rendant possible d'itérer sur le code de l'opérateur efficacement alors que ce dernier tourne. Il y aurait, bien évidemment, d'autres points à aborder tels que comment tester notre opérateur, sa mise en production ou même la compilation native mais nous avons préféré nous concentrer ici sur la partie développement.
 
 Le code complet de notre opérateur est disponible à [https://github.com/halkyonio/exposedapp].
