@@ -2,7 +2,7 @@
 
 Christophe Laprun
 
-Ingénieur logiciel passionné, il allie expertise technique et communication pour comprendre les besoins de ses utilisateurs, avec un soin particulier mis sur l'utilisabilité. Son sujet de prédilection ces derniers temps est l'expérience développeur ciblant Kubernetes et l'IT "vert" sans jamais oublier l'idée que la technologie ne doit jamais perdre son but premier: permettre à ses utilisateurs d'accomplir plus facilement leur tâches. Christophe est le développeur principal du Java Operator SDK et de son extension Quarkus.
+Ingénieur logiciel passionné, il allie expertise technique et communication pour comprendre les besoins de ses utilisateurs, avec un soin particulier mis sur l'utilisabilité. Son sujet de prédilection ces derniers temps est l'expérience développeur ciblant Kubernetes et l'IT "vert" sans jamais oublier l'idée que la technologie ne doit jamais perdre son but premier: permettre à ses utilisateurs d'accomplir plus facilement leur tâches. Christophe est le développeur principal du Java Operator SDK et de son extension Quarkus. Vous pouvez le trouver sur Twitter (@metacosm) et GitHub [https://github.com/metacosm].
 
 # Programmez un opérateur en Java avec Quarkus et Java Operator SDK!
 
@@ -58,8 +58,15 @@ spec:
   imageRef: <référence d’une image Docker>
 ```
 
-Notre but est donc d’écrire un opérateur capable d’être notifié quand des CRs de type `ExposedApp` sont ajoutées, modifiées ou détruites du cluster. En termes d’architecture, en utilisant JOSDK, cela implique de créer une classe représentant notre `CustomResource` puis ensuite un "controller" capable de la prendre en charge en implémentant l’interface `ResourceController` [https://github.com/java-operator-sdk/java-operator-sdk/blob/master/operator-framework-core/src/main/java/io/javaoperatorsdk/operator/api/ResourceController.java], annotée avec `@Controller` [https://github.com/java-operator-sdk/java-operator-sdk/blob/master/operator-framework-core/src/main/java/io/javaoperatorsdk/operator/api/Controller.java]. Le SDK fournit une classe `Operator` [https://github.com/java-operator-sdk/java-operator-sdk/blob/master/operator-framework-core/src/main/java/io/javaoperatorsdk/operator/Operator.java] qui gère les différents "controllers" ainsi que l’infrastructure permettant la gestion des
-évènements bas-niveau envoyés par le serveur d’API de Kubernetes ainsi que de leur envoi sur les méthodes appropriées des "controllers". Ainsi, un événement de création d’une ressource de type `ExposedApp` sera, par exemple, envoyé automatiquement avec la représentation de la nouvelle ressource sur la méthode `createOrUpdateResource` du `ResourceController`, qui pourra alors implémenter la logique appropriée pour réconcilier l’état du cluster avec le nouvel état désiré par l’utilisateur et exprimé par cette nouvelle CR. Il n’y a pas besoin de gérer la création d'un `Watcher` ou `Informer`, comme serait le cas en utilisant un client directement, pour écouter les événements, le SDK s’en occupe automatiquement. Il fournit également une architecture de cache ainsi qu’un mécanisme de gestion des erreurs avec notamment une gestion de nouvelles tentatives graduées quand une exception arrive.
+Notre but est donc d’écrire un opérateur capable d’être notifié quand des CRs de type `ExposedApp` sont ajoutées, modifiées ou détruites du cluster. En termes d’architecture, en utilisant JOSDK, cela implique de créer une classe représentant notre `CustomResource` puis ensuite un "controller" capable de la prendre en charge en implémentant l’interface `ResourceController` [https://github.com/java-operator-sdk/java-operator-sdk/blob/master/operator-framework-core/src/main/java/io/javaoperatorsdk/operator/api/ResourceController.java], annotée avec `@Controller` [https://github.com/java-operator-sdk/java-operator-sdk/blob/master/operator-framework-core/src/main/java/io/javaoperatorsdk/operator/api/Controller.java].
+
+Le SDK fournit une classe `Operator` [https://github.com/java-operator-sdk/java-operator-sdk/blob/master/operator-framework-core/src/main/java/io/javaoperatorsdk/operator/Operator.java] qui gère les différents "controllers" ainsi que l’infrastructure permettant la gestion des évènements bas-niveau envoyés par le serveur d’API de Kubernetes ainsi que de leur envoi sur les méthodes appropriées des "controllers". 
+
+![Diagramme d'architecture](architecture.png)
+
+Ainsi, un évènement de création d’une ressource de type `ExposedApp` sera, par exemple, envoyé automatiquement avec la représentation de la nouvelle ressource sur la méthode `createOrUpdateResource` du `ResourceController`, qui pourra alors implémenter la logique appropriée pour réconcilier l’état du cluster avec le nouvel état désiré par l’utilisateur et exprimé par cette nouvelle CR. Il n’y a pas besoin de gérer la création d'un `Watcher` ou `Informer`, comme serait le cas en utilisant un client directement, pour écouter les évènements, le SDK s’en occupe automatiquement. 
+
+Il fournit également une architecture de cache ainsi qu’un mécanisme de gestion des erreurs avec notamment une gestion de nouvelles tentatives graduées quand une exception arrive.
 
 ## Implémentation
 
@@ -137,7 +144,9 @@ Examinons à présent la classe qui a été générée pour notre CR `ExposedApp
 public class ExposedApp extends CustomResource<ExposedAppSpec, ExposedAppStatus> implements Namespaced {}
 ```
 
-Comme nous allons le voir ensuite, cette classe est au cœur de notre opérateur et de nombreuses informations sont automatiquement inférées à partir du groupe et de la version spécifiés par les annotations `@Group` et `@Version`, respectivement.
+Comme nous allons le voir ensuite, cette classe est au cœur de notre opérateur et de nombreuses informations sont automatiquement inférées à partir du groupe et de la version spécifiés par les annotations `@Group` et `@Version`, respectivement. 
+
+En particulier, JOSDK utilise ces informations pour générer une "Custom Resource Definition" (CRD) associée à notre CR. La CRD est l'équivalent d'une classe en Java: elle décrit et valide la structure des CRs associées en définissant un schéma de validation qui énumère les noms et types des champs de notre CR. La CRD définit l'API que nous voulons ajouter à notre cluster.
 
 
 ```shell
@@ -180,7 +189,7 @@ spec:
 
 Bien évidemment, nos classes étant actuellement vides, notre CRD est très simple mais l'on se rend compte immédiatement, surtout quand on a déjà essayé d'écrire une CRD manuellement, de l'intérêt de pouvoir garder notre CRD synchronisée automatiquement avec les changements faits sur notre code.
 
-Malheureusement, notre opérateur a encore une erreur:       
+Malheureusement, notre opérateur a encore une erreur comme nous pouvons le voir dans la console du Dev Mode de Quarkus (qui tourne toujours, normalement):       
 
 ```shell
 ERROR [io.qua.run.Application] (Quarkus Main Thread) Failed to start application (with profile dev): io.javaoperatorsdk.operator.MissingCRDException: 'exposedapps.halkyon.io' v1 CRD was not found on the cluster, controller 'exposedappcontroller' cannot be registered
@@ -234,7 +243,7 @@ public class ExposedAppController implements ResourceController<ExposedApp> { ..
 
 Il implémente l’interface `ResourceController` paramétrée par notre CR `ExposedApp` et est également annoté avec l’annotation `@Controller`. Cette annotation est un des moyens de configurer le comportement du "controller" par rapport au cluster. Nous pouvons, par exemple, spécifier sur quels namespaces le controller va écouter pour des évènements associés à notre CR. Par défaut, i.e. dans la configuration actuelle, le controller va écouter sur tous les namespaces.
 
-Configurons notre "controller" pour n’écouter que les événements associés au namespace dans lequel il sera déployé sur notre cluster en positionnant le champ `namespaces` de notre annotation `@Controller` à la valeur `Controller.WATCH_CURRENT_NAMESPACE`. Nous allons également renommer notre controller afin de pouvoir utiliser le configurer de manière externe (via le fichier `application.properties`, par exemple) plus simplement en positionnant le champ `name` de l’annotation à la valeur `exposedapp`.
+Configurons notre "controller" pour n’écouter que les évènements associés au namespace dans lequel il sera déployé sur notre cluster en positionnant le champ `namespaces` de notre annotation `@Controller` à la valeur `Controller.WATCH_CURRENT_NAMESPACE`. Nous allons également renommer notre controller afin de pouvoir utiliser le configurer de manière externe (via le fichier `application.properties`, par exemple) plus simplement en positionnant le champ `name` de l’annotation à la valeur `exposedapp`.
 
 ```java
 @Controller(namespaces = Controller.WATCH_CURRENT_NAMESPACE, name = "exposedapp")
@@ -288,7 +297,7 @@ Cette méthode est appelée automatiquement à chaque fois qu'une ressource de t
 
 Notre "controller" doit donc implémenter cette méthode. Dans notre cas, il s'agit de créer un `Deployment`, un `Service` et un `Ingress`.
 
-Voici donc le code pour créer notre `Deployment` associé à notre CR `resource` qui nous est automatiquement fourni par le SDK:
+Voici donc le code pour créer notre `Deployment` associé à notre CR `resource` qui nous est automatiquement fourni par JOSDK lorsqu'il appelle notre méthode `createOrUpdateResource`:
 
 ```java
 final var spec = resource.getSpec(); 
@@ -368,7 +377,7 @@ Dans notre cas, notre ressource principale n'a pas été modifiée et nous n'avo
 
 Le code complété pour notre controller peut être vu à [https://github.com/halkyonio/exposedapp/tree/step-4].
 
-Créons à présent une ressource de type `ExposedApp`:
+Créons à présent une ressource de type `ExposedApp` que nous sauvegarderons dans un fichier `app.yml`:
 
 ```yaml
 apiVersion: "halkyon.io/v1alpha1"
@@ -377,6 +386,12 @@ metadata:
   name: hello-quarkus
 spec:
   imageRef: localhost:5000/quarkus/hello
+```
+
+Envoyons maintenant notre CR sur le cluster:
+
+```shell
+kubectl apply -f app.yml
 ```
 
 Si notre cluster est correctement configuré, nous devrions voir quelque chose de similaire à:
@@ -444,7 +459,7 @@ public class ExposedAppStatus {
 }
 ```
 
-Ajoutons également la gestion du statut dans notre "controller":
+Ajoutons également la gestion du statut à la fin de la méthode `createOrUpdateResource` de notre "controller":
 
 ```java
     // add status to resource
@@ -464,9 +479,17 @@ Ajoutons également la gestion du statut dans notre "controller":
     return UpdateControl.updateStatusSubResource(resource);
 ```
 
-Notre but est de récupérer le statut de notre `Ingress` et de récupérer le nom de l'hôte associé à l'`Ingress`. Si son statut existe, nous extrayons l'information pour mettre à jour le statut de notre CR avec le stade "exposed", sinon nous indiquons que notre CR est encore au stade "processing" dans son statut. Notons également que nous retournons `UpdateControl.updateStatusSubResource(resource)` pour indiquer à JOSDK que notre CR a vu son statut modifié et qu'il doit faire le nécessaire vis-à-vis du cluster. Nous ajoutons également du logging pour être informé quand l'application est exposée.
+Notre but est de récupérer le statut de notre `Ingress` et de récupérer le nom de l'hôte associé à l'`Ingress`. Si son statut existe, nous extrayons l'information pour mettre à jour le statut de notre CR avec le stade "exposed", sinon nous indiquons que notre CR est encore au stade "processing" dans son statut. Notons également que nous retournons `UpdateControl.updateStatusSubResource(resource)` pour indiquer à JOSDK que notre CR a vu son statut modifié et qu'il doit faire le nécessaire vis-à-vis du cluster. Nous ajoutons également du logging pour être informé quand l'application est exposée. Le code de cette étape peut être vu à [https://github.com/halkyonio/exposedapp/tree/step-5]
 
-Détruisons notre CR et recréons là pour observer le résultat. Nous avons beau attendre, le logging ne nous indique jamais que l'application est exposée. De même, si nous examinons notre CR, nous voyons le résultat suivant:
+Détruisons notre CR pour pouvoir ensuite la re-créer et observer le comportement de notre "controller":
+
+```shell
+kubectl delete exposedapps.halkyon.io hello-quarkus
+```
+
+NOTE: Il est important que notre controller soit actif quand nous effaçons la CR. En effet, par défaut, JOSDK configure les "controllers" pour qu'ils ajoutent un "finalizer" aux CRs qu'ils contrôlent: tant que le "finalizer" n'est pas enlevé de la CR, celle-ci ne peut être détruite et comme, normalement, un "finalizer" ne peut être enlevé que par le "controller" qui l'a placé, il est nécessaire que le "controller" soit actif au moment où l'on veut effacer notre CR (ou alors, il faut relancer le "controller" pour que celui-ci fasse le nécessaire une fois la CR marquée comme devant être détruite). Voir [https://kubernetes.io/blog/2021/05/14/using-finalizers-to-control-deletion/] pour plus de détails sur les "finalizers".
+
+Une fois la CR ré-appliquée sur le cluster (avec `kubectl apply`), nous avons beau attendre, le logging ne nous indique jamais que l'application est exposée. De même, si nous examinons notre CR, nous voyons le résultat suivant:
 
 ```shell
 kubectl describe exposedapps.halkyon.io hello-quarkus
