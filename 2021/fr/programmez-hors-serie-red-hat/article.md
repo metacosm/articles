@@ -127,7 +127,7 @@ INFO [io.qua.ope.dep.OperatorSDKProcessor] (build-26) Registered 'io.halkyon.Exp
 ...
 ```
 
-Nous pouvons observer que les classes associées avec notre CR ont été enregistrées pour être accéder via la réflection de Java. Ceci est important pour que notre opérateur puisse fonctionner correctement après avoir été compilé nativement grâce au support du mode natif fourni par Quarkus. Sans l'extension, il aurait fallu d'une part savoir que ces classes nécessitent un accès réflectif mais également comment les enregistrer correctement auprès de GraalVM pour assurer un fonctionnement correct.
+Nous pouvons observer que les classes associées avec notre CR ont été enregistrées pour être accédées via la réflection de Java. Ceci est important pour que notre opérateur puisse fonctionner correctement après avoir été compilé nativement grâce au support du mode natif fourni par Quarkus. Sans l'extension, il aurait fallu d'une part savoir que ces classes nécessitent un accès réflectif mais également comment les enregistrer correctement auprès de GraalVM pour assurer un fonctionnement correct.
                                
 Examinons à présent la classe qui a été générée pour notre CR `ExposedApp`:
 
@@ -137,7 +137,7 @@ Examinons à présent la classe qui a été générée pour notre CR `ExposedApp
 public class ExposedApp extends CustomResource<ExposedAppSpec, ExposedAppStatus> implements Namespaced {}
 ```
 
-Comme nous allons le voir ensuite, cette class est au cœur de notre opérateur et de nombreuses informations sont automatiquement inférrées à partir du groupe et de la version spécifés par les annotations `@Group` et `@Version`, respectivement.
+Comme nous allons le voir ensuite, cette classe est au cœur de notre opérateur et de nombreuses informations sont automatiquement inférées à partir du groupe et de la version spécifiés par les annotations `@Group` et `@Version`, respectivement.
 
 
 ```shell
@@ -178,7 +178,7 @@ spec:
       status: {}
 ```
 
-Bien évidemment, nos classes étant actuellement vide, notre CRD est très simple mais l'on se rend compte immédiatement, surtout quand on a déjà essayé d'écrire une CRD manuellement, de l'intérêt de pouvoir garder notre CRD synchronisée automatiquement avec les changements faits sur notre code.
+Bien évidemment, nos classes étant actuellement vides, notre CRD est très simple mais l'on se rend compte immédiatement, surtout quand on a déjà essayé d'écrire une CRD manuellement, de l'intérêt de pouvoir garder notre CRD synchronisée automatiquement avec les changements faits sur notre code.
 
 Malheureusement, notre opérateur a encore une erreur:       
 
@@ -214,7 +214,7 @@ INFO  [io.qua.ope.run.OperatorProducer] (Quarkus Main Thread) Applied v1 CRD nam
 
 Cette fois notre opérateur démarre correctement, une fois la CRD déployée sur le cluster! Grâce à ce mode de fonctionnement, nous allons pouvoir progressivement enrichir le modèle de notre CR sans avoir à redémarrer notre "operator" ou même quitter notre IDE.
 
-Ajoutons à présent un champ `imageRef` de type String dans la "spec" de notre CR pour indiquer quelle application nous voulons exposer via notre operator. Nous pouvons voir dans les logs de notre application que la CRD est régénérée et appliquée sur le cluster vu qu’une classe affectant son contenu a été changé.
+Ajoutons à présent un champ `imageRef` de type String dans la "spec" de notre CR pour indiquer quelle application nous voulons exposer via notre operator. Nous pouvons voir dans les logs de notre application que la CRD est régénérée et appliquée sur le cluster vu qu’une classe affectant son contenu a été changée.
               
 ### Configuration du "controller"
 En examinant les logs du démarrage nous pouvons voir:
@@ -269,7 +269,7 @@ public class ExposedAppController implements ResourceController<ExposedApp> {
 
 Nous voyons que notre classe possède un champ de type `KubernetesClient`. Il s'agit d'une instance du client Kubernetes fourni par le projet Fabric8 [https://github.com/fabric8io/kubernetes-client]. L’extension `quarkus-operator-sdk` l'injecte automatiquement dans notre controller.
   
-Ce client fourni ce que l'on appelle une API "Fluent" [https://java-design-patterns.com/patterns/fluentinterface/] pour interagir avec le server d'API de Kubernetes. À chaque groupe d'API Kubernetes correspond une interface spécifique permettant aux utilisateurs d'interagir avec l'API de manière guidée. 
+Ce client fourni ce que l'on appelle une API "Fluent" [https://java-design-patterns.com/patterns/fluentinterface/] pour interagir avec le serveur d'API de Kubernetes. À chaque groupe d'API Kubernetes correspond une interface spécifique permettant aux utilisateurs d'interagir avec l'API de manière guidée. 
 
 Par exemple, pour interagir avec les `Deployments` qui sont définis dans le groupe `apps`, nous appelons `client.apps().deployments()`. Pour interagir avec les CRDs en version v1, définies dans le groupe `apiextensions.k8s.io`, nous appelons `client.apiextensions().v1().customResourceDefinitions()`, etc.
                                                                                                       
@@ -464,7 +464,7 @@ Ajoutons également la gestion du statut dans notre "controller":
     return UpdateControl.updateStatusSubResource(resource);
 ```
 
-Notre but est de récupérer le status de notre `Ingress` et de récupérer le nom de l'hôte associé à l'`Ingress`. Si son statut existe, nous extrayons l'information pour mettre à jour le statut de notre CR avec avec le stade "exposed", sinon nous indiquons que notre CR est encore au stade "processing" dans son statut. Notons également que nous retournons `UpdateControl.updateStatusSubResource(resource)` pour indiquer à JOSDK que notre CR a vu son statut modifié et qu'il doit faire le nécessaire vis-à-vis du cluster. Nous ajoutons également du logging pour être informé quand l'application est exposée.
+Notre but est de récupérer le statut de notre `Ingress` et de récupérer le nom de l'hôte associé à l'`Ingress`. Si son statut existe, nous extrayons l'information pour mettre à jour le statut de notre CR avec le stade "exposed", sinon nous indiquons que notre CR est encore au stade "processing" dans son statut. Notons également que nous retournons `UpdateControl.updateStatusSubResource(resource)` pour indiquer à JOSDK que notre CR a vu son statut modifié et qu'il doit faire le nécessaire vis-à-vis du cluster. Nous ajoutons également du logging pour être informé quand l'application est exposée.
 
 Détruisons notre CR et recréons là pour observer le résultat. Nous avons beau attendre, le logging ne nous indique jamais que l'application est exposée. De même, si nous examinons notre CR, nous voyons le résultat suivant:
 
@@ -523,7 +523,7 @@ public void init(EventSourceManager eventSourceManager) {
 }
 ```
 
-Détruisons encore une fois notre CR et ajoutons là à nouveau:
+Détruisons encore une fois notre CR et ajoutons la à nouveau:
 
 ```shell
 [io.hal.ExposedAppController] (EventHandler-exposedapp) Exposing hello-quarkus application from image localhost:5000/quarkus/hello
@@ -537,7 +537,7 @@ INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Ingress hello-quar
 INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) App hello-quarkus is exposed and ready to used at https://localhost
 ```
 
-Nous voyons donc que notre "controller" est appelé une première fois lorsque notre CR est créé puis, contrairement à précédemment, appelé une second fois lorsque l'`Ingress` change de statut et nous avons bien le "logging" que nous espérions. 
+Nous voyons donc que notre "controller" est appelé une première fois lorsque notre CR est créé puis, contrairement à précédemment, appelé une seconde fois lorsque l'`Ingress` change de statut et nous avons bien le "logging" que nous espérions. 
 
 De même si nous examinons notre CR, nous pouvons constater que son statut a bien été mis à jour:
 
@@ -555,6 +555,6 @@ Status:
 
 ## Conclusion
 
-Ainsi se termine notre briève introduction au monde des opérateurs écrits en Java. Nous avons vu comment JOSDK et son extension simplifie la tâche tout en rendant possible d'itérer sur le code de l'opérateur efficacement alors que ce dernier tourne.
+Ainsi se termine notre brève introduction au monde des opérateurs écrits en Java. Nous avons vu comment JOSDK et son extension simplifie la tâche tout en rendant possible d'itérer sur le code de l'opérateur efficacement alors que ce dernier tourne.
 
 Le code complet de notre opérateur est disponible à [https://github.com/halkyonio/exposedapp].
