@@ -62,10 +62,10 @@ Since we paused the effort, we became aware of several projects that could be he
 ## Conclusion
 
 While our initiative didn't lead to concrete results, we learned a lot in the process, shedding our initial naïveté regarding the topic of carbon impact of cloud applications. We think that this topic is an important one to address because, as previously mentioned, the impact of cloud technologies is often disregarded because not immediately visible and/or measurable. However, if we want to transition our economy to a fully decarbonized economy, we will need to first quantify the carbon impact of our clouds in order to make them sustainable. We feel that Red Hat is well positioned to be a leader on that topic but we have to admit it's a little disappointing that Red Hat doesn't already appear to be working on similar offerings, especially considering that our efforts to connect with the OpenShift team have mostly been met with silence, in particular when VMWare recently announced an initiative[^vmware] to provide zero-carbon cloud plans to its customers.
- 
                 
 ## Resources
-
+                                                
+- [Minutes of the CO2 dashboard workstream](https://docs.google.com/presentation/d/10gM7HatgqQel1l7OyjxzIVOLwe7SGxOZJnc9BYbagg0/edit?pli=1#slide=id.p)
 - [Principles of Sustainable Software Engineering](https://principles.green/)
 - [Why green cloud optimization is profitable for you and the planet](https://www.thoughtworks.com/insights/articles/green-cloud)
 - [How green is your cloud? Tools for reducing your cloud carbon footprint](https://drive.google.com/file/d/1umBCfQXDzz4MJzxjMJE1AQXnb4humkBy/view)
