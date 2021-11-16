@@ -91,3 +91,4 @@ While our initiative didn't lead to concrete results, we learned a lot in the pr
 [^ccf-github]: https://github.com/cloud-carbon-footprint/cloud-carbon-footprint
 [^climatiq]: https://docs.climatiq.io/
 [^watttime]: https://www.watttime.org/api-documentation
+[^powerapi]: http://powerapi.org/
