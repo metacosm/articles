@@ -155,7 +155,7 @@ worry about anything but writing out controller. Indeed, the extension lets us k
 evidenced by the error message on the console:
 
 ```shell
-ERROR [io.qua.run.Application] (Quarkus Main Thread) Failed to start application (with profile dev): io.javaoperatorsdk.operator.OperatorException: No Controller exists. Exiting!
+WARN  [io.qua.ope.run.AppEventListener] (Quarkus Main Thread) No Reconciler implementation was found so the Operator was not started.
 ```
 
 Let's add a controller then and its associated CR then!
