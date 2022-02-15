@@ -162,8 +162,9 @@ Let's add a controller then and its associated CR then!
 
 ### Iterative Custom Resource implementation
                                 
-As mentioned in Part 1, defining a Custom Resource is equivalent to definining an API, a contract with the 
-Kubernetes API. And, indeed, creaing a CR using `operator-sdk` is done by using the `create api` command, where we 
+As mentioned in [Part 1](link to part 1?), defining a Custom Resource is equivalent to defining an API, a contract with 
+the 
+Kubernetes API. And, indeed, creating a CR using `operator-sdk` is done by using the `create api` command, where we 
 specify the kind (`ExposedApp` in our case) of our CR and its version (`v1alpha1` here):
 
 ```shell
@@ -212,7 +213,7 @@ would have needed to configure GraalVM accordingly.
 
 
 As previously mentioned, our CR class is annotated with the `@Group` and `@Version` annotations, utilizing the 
-information we passed to the `operator-sdk` tool. In particular, this information is used to defined the resource 
+information we passed to the `operator-sdk` tool. In particular, this information is used to define the resource 
 name associated with our CR automatically and register our reconciler with the automatically created `Operator` 
 instance:  
 
@@ -230,7 +231,7 @@ INFO  [io.qua.ope.dep.OperatorSDKProcessor] (build-14)   - v1 -> <path to your a
 ```
 
 CRDs are to CRs what Java classes are to Java instances: they describe and validate the structure of associated CR by
-specifying the name and type of each of our CR fields. The CRD is how we the Kubernetes API learns about what to expect
+specifying the name and type of each of our CR fields. The CRD is how the Kubernetes API learns about what to expect
 from your newly added API. CRDs are, like almost everything Kubernetes related, themselves resources, ones that are 
 a little tricky to create manually if we want them to be useful. It's therefore really interesting that the Quarkus 
 extension for JOSDK can generate the CRD automatically from our code. Not only that, but the extension will also keep 
