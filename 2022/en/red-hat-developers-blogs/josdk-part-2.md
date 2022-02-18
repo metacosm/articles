@@ -278,8 +278,15 @@ INFO  [io.qua.ope.run.OperatorProducer] (Quarkus Main Thread) Applied v1 CRD nam
 
 This time, your operator starts correctly and tells you that it applied the CRD to your cluster. Thanks to this
 development mode, you will be able to progressively enrich your model without having to leave your code editor to stop
-to either re-generate the CRD or apply it to the cluster each time you change your Java classes.
+to either re-generate the CRD or apply it to the cluster each time you change your Java classes. In particular, remember
+that the `ExposedApp` CR exposes an `imageRef` field as part of its `spec` to specify which application you want to
+expose via your operator.
 
-This will, however, have to wait for next time as we've already covered quite a bit of ground this time as we've started
-looking into what's needed to write an operator in Java with JOSDK and how its Quarkus extension makes it even easier
-and, dare we say, enjoyable! 
+Add such an `imageRef` `String` field to your `ExposedAppSpec` class. You can see in the logs that the Quarkus extension
+restarted the operator, the CRD got regenerated (since you changed a class that impacts its content) and re-applied to
+your cluster. Great!
+
+You will now need to add the logic to your reconciler to create the Kubernetes resources required to expose your
+application. This will, however, have to wait for next time as we've already covered quite a bit of ground this time as
+we've looked at how JOSDK and its Quarkus extension help you stay in the flow while modelling your operator's domain
+and, dare we say, make the whole experience enjoyable! 
