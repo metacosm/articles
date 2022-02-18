@@ -3,7 +3,7 @@
 [Java Operator SDK](https://javaoperatorsdk.io) (also known as JOSDK) is an open-source project initiated by
 [Container Solutions](https://container-solutions.com) and to which [Red Hat](https://redhat.com) is now a major
 contributor. It was started to simplify the task of creating Kubernetes operators using Java. We motivated and
-introduced JOSDK in [part 1](LINK TO PART 1). In this article and its sequel, you will take a deeper look at JOSDK's
+introduced JOSDK in [part 1](LINK TO PART 1). In this article and its sequels, you will take a deeper look at JOSDK's
 concepts and how it simplifies developing operators by building a simple example using JOSDK and its
 [`quarkus-operator-sdk`](https://github.com/quarkiverse/quarkus-operator-sdk) extension for
 [Quarkus](https://quarkus.io), a Kubernetes-native Java stack.
