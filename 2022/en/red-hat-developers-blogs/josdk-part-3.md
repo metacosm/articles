@@ -107,6 +107,7 @@ the `@ControllerConfiguration` annotation.
 Let's rename your reconciler and configure it to only watch the current namespace:
 
 ```java
+
 @ControllerConfiguration(namespaces = Constants.WATCH_CURRENT_NAMESPACE, name = "exposedapp")
 public class ExposedAppReconciler implements Reconciler<ExposedApp> {
 // rest of the code here
@@ -329,15 +330,15 @@ kubectl get all -l app.kubernetes.io/name=<name of your CR>
 ```
 
 If everything worked well, you should indeed see that a `Pod`, a `Service`, a `Deployment` and a `ReplicaSet` have all
-been created for your application. `Ingresses` are not part of the resources that are displayed by a `kubectl get 
-all` so you'd need a separate command to check on your `Ingress`:
+been created for your application. `Ingresses` are not part of the resources that are displayed by a `kubectl get all`
+so you'd need a separate command to check on your `Ingress`:
 
 ```shell
 kubectl get ingresses.networking.k8s.io -l app.kubernetes.io/name=<name of your CR>
 ```
 
-In our case, we created an `hello-quarkus` `ExposedApp` that exposes a simple "Hello World" Quarkus application and 
-got the following result: 
+In our case, we created an `hello-quarkus` `ExposedApp` that exposes a simple "Hello World" Quarkus application and got
+the following result:
 
 ```shell
 kubectl get ingresses.networking.k8s.io -l app.kubernetes.io/name=hello-quarkus
@@ -345,14 +346,15 @@ NAME          CLASS   HOSTS ADDRESS   PORTS AGE
 hello-quarkus <none>  *     localhost 80    9m40s
 ```
 
-Our application exposes a `hello` endpoint and we can indeed verify that accessing http://localhost/hello results in 
-the expected greeting!
+Our application exposes a `hello` endpoint and we can indeed verify that accessing http://localhost/hello results in the
+expected greeting!
 
-This concludes part 3 of our series. We've finally implemented a very simple operator and learned more about JOSDK 
-in the process. If you remember part 1, we said that one interesting aspect of operators is to enable users to deal 
-with a Kubernetes cluster via the lens of an API customized to their needs and comfort level with Kubernetes 
-clusters. In our case, this simplified view is materialized by the `ExposedApp` API. However, as you can see above, 
-while we've simplified exposing an application via only its image reference, knowing **where** to access the 
-application is not trivial! Similarly, checking if things are working properly requires knowing about labels and how 
-to retrieve associated resources from the cluster. Not difficult but we've only fulfilled one part of our contract 
-so we'll look into adding that information to our CR so that users really only need to deal with the CR!
+This concludes part 3 of our series. You've finally implemented a very simple operator and learned more about JOSDK in
+the process. If you remember part 1, we said that one interesting aspect of operators is to enable users to deal with a
+Kubernetes cluster via the lens of an API customized to their needs and comfort level with Kubernetes clusters. In the
+use case we chose for this blog series, this simplified view is materialized by the `ExposedApp` API. However, as you
+can see above, while you've simplified exposing an application via only its image reference, knowing **where** to access
+the application is not trivial! Similarly, checking if things are working properly requires knowing about labels and how
+to retrieve associated resources from the cluster. Not difficult but your operator only fulfills one part of the
+contract so we'll look into adding that information to your CR so that users really only need to deal with your 
+Kubernetes extension and nothing else!
