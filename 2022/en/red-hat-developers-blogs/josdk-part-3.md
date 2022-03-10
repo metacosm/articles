@@ -337,7 +337,7 @@ so you'd need a separate command to check on your `Ingress`:
 kubectl get ingresses.networking.k8s.io -l app.kubernetes.io/name=<name of your CR>
 ```
 
-In our case, we created an `hello-quarkus` `ExposedApp` that exposes a simple "Hello World" Quarkus application and got
+In our case, we created a `hello-quarkus` `ExposedApp` that exposes a simple "Hello World" Quarkus application and got
 the following result:
 
 ```shell
