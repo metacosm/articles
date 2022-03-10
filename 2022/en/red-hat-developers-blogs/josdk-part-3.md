@@ -99,7 +99,7 @@ deployed. This is accomplished by using the `Constants.WATCH_CURRENT_NAMESPACE` 
 We won't go into the details of all the configuration options here as this is not our purpose but let's mention that you
 can also configure your controller programmatically and that you can also use the commonly used Quarkus mechanism of
 using an `application.properties` file, which property values can also be overridden by different mechanisms. One thing
-we will mention here, though, is that the name of your reconciler is used in `application. properties` for configuration
+we will mention here, though, is that the name of your reconciler is used in `application.properties` for configuration
 options that affect your controller specifically. While this name is automatically generated, it might be useful to
 provide one that makes more sense to you or that is easier to remember. This is done using the `name` field of
 the `@ControllerConfiguration` annotation.
