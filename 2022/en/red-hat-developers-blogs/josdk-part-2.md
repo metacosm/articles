@@ -1,3 +1,5 @@
+# Simplify Kubernetes Operator development with the Java Operator SDK
+
 [Java Operator SDK](https://javaoperatorsdk.io), or JOSDK, is an open source project that aims to simplify the task of
 creating [Kubernetes](https://kubernetes.io) Operators using Java. The project was started
 by [Container Solutions](https://container-solutions.com), and Red Hat is now a major contributor.
