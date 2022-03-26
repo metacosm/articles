@@ -5,8 +5,9 @@ creating Kubernetes Operators using Java. The project was started
 by [Container Solutions](https://container-solutions.com), and Red Hat is now a major contributor.
 
 The [first article in this series](https://developers.redhat.com/articles/2022/02/15/write-kubernetes-java-java-operator-sdk)
-introduced JOSDK and explained why it could be interesting to create Operators in Java. The [second article](LINK TO
-PART 2) showed how the [Quarkus extension `quarkus-operator-sdk`](https://github.com/quarkiverse/quarkus-operator-sdk)
+introduced JOSDK and explained why it could be interesting to create Operators in Java. The
+[second article](https://developers.redhat.com/articles/2022/02/15/write-kubernetes-java-java-operator-sdk) showed how
+the [Quarkus extension `quarkus-operator-sdk`](https://github.com/quarkiverse/quarkus-operator-sdk)
 for JOSDK facilitates the development experience by taking care of managing the Custom Resource Definition
 automatically. This article will focus on adding the reconciliation logic.
 
