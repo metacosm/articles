@@ -1,36 +1,39 @@
-# Java Operator SDK: implementing a `Reconciler`
+# Writing Kubernetes Operators in Java with JOSDK, Part 3: Implementing a controller
 
-[Java Operator SDK](https://javaoperatorsdk.io), or JOSDK, is an open source project that aims to simplify the task of
+[Java Operator SDK](https://javaoperatorsdk.io) (JOSDK) is an open source project that aims to simplify the task of
 creating Kubernetes Operators using Java. The project was started
-by [Container Solutions](https://container-solutions.com), and Red Hat is now a major contributor.
+by [Container Solutions](https://container-solutions.com) and Red Hat is now a major contributor.
 
 The [first article in this series](https://developers.redhat.com/articles/2022/02/15/write-kubernetes-java-java-operator-sdk)
-introduced JOSDK and explained why it could be interesting to create Operators in Java. The
-[second article](https://developers.redhat.com/articles/2022/02/15/write-kubernetes-java-java-operator-sdk) showed how
-the [Quarkus extension `quarkus-operator-sdk`](https://github.com/quarkiverse/quarkus-operator-sdk)
-for JOSDK facilitates the development experience by taking care of managing the Custom Resource Definition
-automatically. This article will focus on adding the reconciliation logic.
+introduced JOSDK and gave reasons for creating Operators in Java.
+The [second article](https://developers.redhat.com/articles/2022/03/22/write-kubernetes-java-java-operator-sdk-part-2)
+showed how the [quarkus-operator-sdk extension](https://github.com/quarkiverse/quarkus-operator-sdk) for JOSDK, together
+with the Quarkus framework, facilitates the development experience by managing the custom resource definition
+automatically. This article focuses on adding the reconciliation logic.
 
 ## Where things stand
 
-You ended the second article having more or less established the model for your Custom Resource (CR), having developed
-it iteratively thanks to the Quarkus extension for JOSDK. For reference, the CRs would look similar to:
+You ended the second article having more or less established the model for your custom resource (CR). You developed it
+iteratively, thanks to the Quarkus extension for JOSDK. For reference, the CRs look similar to:
 
 ```yaml
 apiVersion: "halkyon.io/v1alpha1"
 kind: ExposedApp
 metadata:
-  name: <Name of our application>
+  name: <Name of your application>
+
 spec:
   imageRef: <Docker image reference>
 ```
 
-Let's now examine what's required to implement the second aspect of operators: writing a controller to handle your CRs.
+Let's now examine what's required to implement the second aspect of Operators: Writing a controller to handle your CRs.
+In JOSDK parlance, a Kubernetes controller is represented by a `Reconciler` implementation, and the association of
+a `Reconciler` implementation with its configuration is called a `Controller`.
 
 ## Reconciler
 
-In JOSDK parlance, a Kubernetes controller is represented by a `Reconciler` implementation. Let's look at the
-one `operator-sdk create api` generated for you when you ran that command in the second article:
+Here's the implementation that the `operator-sdk create api` command generated for you when you ran it in the second
+article:
 
 ```java
 package io.halkyon;
@@ -58,56 +61,58 @@ public class ExposedAppReconciler implements Reconciler<ExposedApp> {
 }
 ```
 
-As mentioned previously, your `Reconciler` implementation needs to be parameterized by your Custom Resource class
-(`ExposedApp` in this instance).
+As mentioned previously, your `Reconciler` implementation needs to be parameterized by your custom resource
+class (`ExposedApp` in this instance).
 
-By default, only one method is required to be implemented, the `reconcile` method. This method takes two parameters:
-the resource for which the reconciliation got triggered and a `Context` object that allows your reconciler to retrieve
-contextual information from the SDK. If you are used to writing operators in Go, you might be surprised:
-where is the watcher or informer implementation, where is the manager? JOSDK takes care of wiring everything together so
-that your reconciler implementation is called whenever a resource that it declares ownership of is modified, extracting
-the resource in question and passing it to your `reconcile` method automatically without you having to do anything
-specific. As previously mentioned, as well, using the Quarkus extension for JOSDK also simplifies things further as it
-takes care of creating an `Operator` instance and registerin your reconciler with it.
+By default, you have to implement only one method, called `reconcile()`. This method takes two parameters: the resource
+for which the reconciliation was triggered, and a `Context` object that allows your reconciler to retrieve contextual
+information from the SDK.
 
-Let's take a look at how you can configure your reconciler before diving into the implementation of your reconciliation
-logic.
+If you are used to writing Operators in Go, you might be surprised: Where is the watcher or informer
+implementation, and where is the manager? JOSDK takes care of wiring everything together so that your reconciler
+implementation is called whenever there is a modification to a resource that the reconciler declares ownership of. The
+runtime extracts the resource in question and passes it to your `reconcile()` method automatically without you having to
+do anything specific. The Quarkus extension for JOSDK also simplifies things further by taking care of creating
+an `Operator` instance and registering your reconciler with it.
 
-## Controller configuration
+### Controller configuration
 
-In JOSDK parlance, the association of a `Reconciler` implementation and its associated configuration is called a
-`Controller`. You rarely will have to deal with `Controllers` directly, though, as a `Controller` instance is created
-automatically when you register your reconciler (or when the Quarkus extension does it automatically for you).
+Let's look at how to configure your reconciler before diving into the implementation of your reconciliation logic. As
+explained above, the `Controller` associates a `Reconciler` with its configuration. You rarely have to deal
+with `Controller`s directly, though, because a `Controller` instance is created automatically when you register your
+reconciler (or when the Quarkus extension does it automatically for you).
 
-Looking at the logs of our operator as it starts, we can see:
+Looking at the logs of your Operator as it starts, you should see:
 
 ```shell
 INFO  [io.jav.ope.Operator] (Quarkus Main Thread) Registered reconciler: 'exposedappreconciler' for resource: 'class io.halkyon.ExposedApp' for namespace(s): [all namespaces]
 ```
 
-`exposedappreconciler` is an automatically generated name for your reconciler. You can also note that it is registered
-to automatically watched all namespaces in your cluster. It will therefore receive any event associated with your custom
-resources wherever it might happen on the cluster. While this might be convenient when developing your controller, it's
-not necessarily how you'd like your controller to operate when deployed to production. JOSDK offers several ways to
-control this particular aspect and the Quarkus extension adds several more options as well.
+`exposedappreconciler` is the name that was automatically generated for your reconciler.
 
-Let's look at the probably most commonly used option: the `@ControllerConfiguration`, which allows you, in particular,
-to configure which namespaces your reconciler will watch. This is done by setting the `namespaces` field of the
-annotation to a list of comma-separated namespace names. If not set, which is the case by default, reconcilers are
-configured to watch all namespaces. An interesting option is also to be able to watch solely the namespace in which the
-operator is deployed. This is accomplished by using the `Constants.WATCH_CURRENT_NAMESPACE` value for the
-`namespaces` field.
+Also note that the reconciler is registered automatically to watch all namespaces in your cluster. The reconciler will
+therefore receive any event associated with your custom resources, wherever it might happen on the cluster. Although
+this might be convenient when developing your controller, it's not necessarily how you'd like your controller to operate
+when deployed to production. JOSDK offers several ways to control this particular aspect of association, and the Quarkus
+extension adds several more options as well.
 
-We won't go into the details of all the configuration options here as this is not our purpose but let's mention that you
-can also configure your controller programmatically and that you can also use the commonly used Quarkus mechanism of
-using an `application.properties` file, as is typical when
-[configuring Quarkus applications](https://quarkus.io/guides/config-reference). One thing we will mention here, though,
-is that the name of your reconciler is used in `application.properties` for configuration options that affect your
-controller specifically. While this name is automatically generated based on your reconciler's class name, it might be
-useful to provide one that makes more sense to you or that is easier to remember. This is done using the `name` field of
-the `@ControllerConfiguration` annotation.
+Let's look at what's probably the most common option: The `@ControllerConfiguration` annotation, which allows you to
+configure, among other features, which namespaces your reconciler will watch. You can use the option by setting
+the `namespaces` field of the annotation to a list of comma-separated namespace names. If the field is not set, which is
+the case by default, reconcilers are configured to watch all namespaces. An interesting option is to make the reconciler
+solely watch the namespace in which the Operator is deployed. This restriction is imposed by specifying
+the `Constants.WATCH_CURRENT_NAMESPACE` value for the `namespaces` field.
 
-Let's rename your reconciler and configure it to only watch the current namespace:
+We won't go into the details of all the configuration options here, because that's not the topic of this article, but
+we'll mention that you can also configure your controller programmatically. Alternatively, you can take advantage of
+the `application.properties` file commonly used in Quarkus, as is typical
+when [configuring Quarkus applications](https://quarkus.io/guides/config-reference). The name of your reconciler is used
+in `application.properties` for configuration options that affect your controller specifically. While a name is
+automatically generated based on your reconciler's class name, it might be useful to provide one that makes more sense
+to you or that is easier to remember. You can specify a name using the `name` field of the `@ControllerConfiguration`
+annotation.
+
+Let's rename your reconciler and configure it to watch only the current namespace:
 
 ```java
 
@@ -117,15 +122,16 @@ public class ExposedAppReconciler implements Reconciler<ExposedApp> {
 }
 ```
 
-Since the configuration has changed, the Quarkus extension restarts your operator and you can indeed see that the new
-configuration has been taken into account:
+Since the configuration has changed, the Quarkus extension restarts your Operator and shows that the new configuration
+has indeed been taken into account:
 
 ```shell
 INFO  [io.jav.ope.Operator] (Quarkus Main Thread) Registered reconciler: 'exposedapp' for resource: 'class io.halkyon.ExposedApp' for namespace(s): [default]
 ```
 
-If you'd wanted to change the namespaces configuration to only watch the `foo`, `bar` and `baz` namespaces using
-`application.properties`, you'd do so as follows, using the newly configured name for your reconciler:
+If you wanted to watch only the `foo`, `bar`, and `baz` namespaces, you could modify
+`application.properties` to change the `namespaces` configuration as follows, using the newly configured name for your
+reconciler:
 
 ```properties
 quarkus.operator-sdk.controllers.exposedapp.namespaces=foo,bar,baz
@@ -133,36 +139,40 @@ quarkus.operator-sdk.controllers.exposedapp.namespaces=foo,bar,baz
 
 ### Reconciliation logic
 
-Now that you have configured your controller, it's time to implement the reconciliation logic. If you recall our use
-case, whenever you create an `ExposedApp` CR, your operator needs to create three dependent resources: a
-`Deployment`, a `Service` and an `Ingress`. This concept of dependent resources is quite central to writing operators:
-the desired state that you're targeting, as materialized by your CR, very often requires managing the state of several
-other resources either Kubernetes native or completely external to the cluster. Managing this state is what
-the `reconcile` method is all about.
+Now that you have configured your controller, it's time to implement the reconciliation logic. Whenever you create
+an `ExposedApp` CR, your Operator needs to create three dependent resources: a `Deployment`, a `Service`, and
+an `Ingress`. This concept of dependent resources is central to writing Operators: The desired state that you're
+targeting, as materialized by your CR, very often requires managing the state of several other resources either within
+Kubernetes or completely external to the cluster. Managing this state is what the `reconcile()` method is all about.
 
-Kubernetes doesn't offer explicit ways to manage such related resources together so it's up to controllers to be able to
-identify and manage resources of interest. One common way to specify that resources belong together is to
-use [labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/). It's such a common way that
-there is a [set of recommended labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/)
-to help you manage the resources associated with your applications. Since the goal of the operator you're developing
-here is to expose an application, it makes sense to add some of these labels to all the resources associated with your
-application, to be able to visualize them, at least. Since the goal of this article is not to create a production-ready
-operator, you will only add the `app.kubernetes.io/name` label and will set its value to the name of your CR.
+Kubernetes doesn't offer explicit ways to manage such related resources together, so it's up to controllers to identify
+and manage resources of interest. One common way to specify that resources belong together is to
+use [labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/). The use of labels is so common
+that there is
+a [set of recommended labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/) to help
+you manage the resources associated with your applications.
 
-An aspect that Kubernetes can take care of automatically, though, is the lifecycle of dependent resources. More
+Since the goal of the Operator you're developing here is to expose an application, it makes sense to add some of these
+labels to all the resources associated with your application, at least to be able to visualize them. Because the goal of
+this article is not to create a production-ready Operator, here you add only the `app.kubernetes.io/name` label and set
+its value to the name of your CR.
+
+One aspect that Kubernetes can take care of automatically, though, is the lifecycle of dependent resources. More
 specifically, it often makes sense to remove all dependent resources when the primary resource is removed from the
-cluster. In the use case we're considering, it makes perfect sense: if you remove our `ExposedApp` CR from the cluster,
-you don't want to have to manually delete all the associated resources that your operator created. Of course, it's
-perfectly possible for your operator to react to a deletion event of your CR to programmatically delete the associated
-resources. However, if Kubernetes can do it automatically for you, you should definitely take advantage of this feature.
-This is accomplished by adding
+cluster. Removing the dependent resources make sense particularly in this use case: If you remove your `ExposedApp` CR
+from the cluster, you don't want to have to manually delete all the associated resources that your Operator created.
+
+Of course, it's perfectly possible for your Operator to react to a deletion event of your CR by programmatically
+deleting the associated resources. However, if Kubernetes can do it automatically for you, you should definitely take
+advantage of this feature. You can ask Kubernetes to take care of this deletion by adding
 an [owner reference](https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/) pointing to
 your CR in all your dependent resources. This lets Kubernetes know that your primary resource (`ExposedApp` in this
-example) owns a set of associated dependent resources and will automatically clean these up when the owner is deleted.
+example) owns a set of associated dependent resources, so Kubernetes will automatically clean those up when the owner is
+deleted.
 
-Both labels and owner references are part of a resource `metadata` field.
+Both labels and owner references are part of a `metadata` resource field.
 
-But enough theory, let's look at the reconciler skeleton the `operator-sdk` tool generated for you:
+But enough theory. Let's look at the reconciler skeleton the `operator-sdk` tool generated for you:
 
 ```java
 public class ExposedAppReconciler implements Reconciler<ExposedApp> {
@@ -183,33 +193,41 @@ public class ExposedAppReconciler implements Reconciler<ExposedApp> {
 }
 ```
 
-As you can see, you get access to a `KubernetesClient` field. It's an automatically injected instance of the Kubernetes
-client provided by the [Fabric8 project](https://github.com/fabric8io/kubernetes-client). You automatically get an
-instance configured to access the cluster you're connected to. You can, of course, configure it if needed using the
-configuration options provided by
-the [Quarkus Kubernetes Client extension](https://quarkus.io/guides/kubernetes-client#configuration-reference). This
-client was chosen because it offers an interface that is very natural for Java developers, providing
+The generated code gives you access to a `KubernetesClient` field. It's an automatically injected instance of
+the [Kubernetes client provided by the Fabric8 project](https://github.com/fabric8io/kubernetes-client). You
+automatically get an instance configured to access the cluster you're connected to. You can, of course, configure the
+client using the configuration options provided by
+the [Quarkus Kubernetes client extension](https://quarkus.io/guides/kubernetes-client#configuration-reference), if
+necessary. This client was chosen because it offers an interface that is very natural for Java developers, providing
 a [fluent API](https://java-design-patterns.com/patterns/fluentinterface/) to interact with the Kubernetes API. Each
 Kubernetes API group is represented by a specific interface, guiding the user during their interaction with the cluster.
 
-For example, in order to operate on Kubernetes `Deployments`, which are defined in the `apps` API group, you will
-retrieve the `Deployment`-specific interface by calling `client.apps().deployments()`, where `client` is your Kubernetes
-client instance. To interact with CRDs in version `v1`, defined in the `apiextensions.k8s.io` group, you would
+For example, to operate on Kubernetes `Deployment`s, which are defined in the `apps` API group, retrieve the interface
+specific to a `Deployment` by calling `client.apps().deployments()`, where `client` is your Kubernetes client instance.
+To interact with CRDs in version `v1`, defined in the `apiextensions.k8s.io` group,
 call `client.apiextensions().v1().customResourceDefinitions()`, etc.
 
-The logic of your operator is implemented in
-the `UpdateControl<ExposedApp> reconcile(ExposedApp exposedApp, Context context)` method. This method gets triggered
-automatically by JOSDK whenever an `ExposedApp` is created or modified on the cluster. The resource that triggered the
-method is provided: that's the `exposedApp` parameter, above. The `Context` parameter provides, quite logically,
-contextual information about the current reconciliation. We will talk about it in greater details later. You can also
-see that you need to return an `UpdateControl` instance. This tells JOSDK what needs to be done with your resource after
-the reconciliation is finished. Typically, you'd want to maybe change the status of the resource, in which case you'd
-return `UpdateControl.updateStatus` passing it your updated resource. If you wanted to enrich your resource with added
-metadata, you'd return `UpdateControl.updateResource` or even return `UpdateControl.noUpdate` if no changes at all were
-needed on your resource. While it's technically possible to even change the `spec` field of your resource, remember that
-this field represents the desired state that the user specifies and it shouldn't be changed unduly by the operator.
+The logic of your Operator is implemented in the following method:
 
-Now that this is set, let's see what you need to do to create the `Deployment` associated with your `ExposedApp` CR:
+```java
+    public UpdateControl<ExposedApp> reconcile(ExposedApp exposedApp,Context context){
+```
+
+This method gets triggered automatically by JOSDK whenever an `ExposedApp` is created or modified on the cluster. The
+resource that triggered the method is provided: That's the `exposedApp` parameter in the previous snippet. The `context`
+parameter provides, quite logically, contextual information about the current reconciliation. You'll learn more about
+this parameter in greater detail later.
+
+The function has to return an `UpdateControl` instance. This return value tells JOSDK what needs to be done with your
+resource after the reconciliation is finished. Typically, you want to change the status of the resource, in which case
+you return `UpdateControl.updateStatus`, passing it your updated resource. If you want to enrich your resource with
+added metadata, return `UpdateControl.updateResource`. Return `UpdateControl.noUpdate` if no changes at all are needed
+on your resource.
+
+While it's technically possible to even change the `spec` field of your resource, remember that this field represents
+the desired state specified by the user, and shouldn't be changed unduly by the Operator.
+
+Now let's see what you need to do to create the `Deployment` associated with your `ExposedApp` CR:
 
 ```java,noformat
 final var name=exposedApp.getMetadata().getName();
@@ -217,14 +235,14 @@ final var spec=exposedApp.getSpec();
 final var imageRef=spec.getImageRef();
 
 var deployment =new DeploymentBuilder()
-    .withMetadata(createMetadata(exposedApp,labels))
+    .withMetadata(createMetadata(exposedApp, labels))
     .withNewSpec()
         .withNewSelector().withMatchLabels(labels).endSelector()
         .withNewTemplate()
             .withNewMetadata().withLabels(labels).endMetadata()
             .withNewSpec()
                 .addNewContainer()
-                    .withName(name).withImage(imageRef);
+                    .withName(name).withImage(imageRef)
                     .addNewPort()
                         .withName("http").withProtocol("TCP").withContainerPort(8080)
                     .endPort()
@@ -237,24 +255,26 @@ var deployment =new DeploymentBuilder()
 client.apps().deployments().createOrReplace(deployment);
 ```
 
-Let's go through this code. First, assuming `exposedApp` is the instance of your `ExposedApp` CR that JOSDK provides you
-with when it triggers your `reconcile` method, you retrieve its name and extract the `imageRef` value from its `spec`.
-Remember that this field records the image reference of the application you want to expose. You will use that
-information to build a `Deployment` using the Fabric8 client's `DeploymentBuilder` class. As you can see the fluent
-interface makes the code reads almost like English: you create the metadata from the labels, use these labels to create
-a selector and create a new template for spawned containers. These containers will be named after the CR (its `name` is
-used as the container's name) and with an image specified quite logically by the `imageRef` value extracted from the CR
-spec. In this example, the port information is hardcoded but we could imagine extending the CR to add that information
-as well.
+Let's go through this code. First, assuming that `exposedApp` is the instance of your `ExposedApp` CR that JOSDK
+provides you with when it triggers your `reconcile()` method, you retrieve its name and extract the `imageRef` value
+from its `spec`. Remember that this field records the image reference of the application you want to expose. You will
+use that information to build a `Deployment` using the Fabric8 client's `DeploymentBuilder` class.
 
-Finally, after retrieving the `Deployment`-specific interface, call `createOrReplace`, which, as its name implies, will
-either create the `Deployment` on the cluster or replace it with the new values if it already exists. Easy enough.
+The fluent interface makes the code reads almost like English: you create the metadata from the labels, use these labels
+to create a selector, and create a new template for spawned containers. These containers are named after the CR (
+its `name` is used as the container's name), and the image is specified quite logically by the `imageRef` value
+extracted from the CR spec. In this example, the port information is hardcoded, but you could extend the CR to add that
+information as well.
 
-The `createMetadata` method is in charge of setting the labels but also needs to take care of setting the owner
-reference on your dependent resources:
+Finally, after retrieving the `Deployment`-specific interface, the method calls `createOrReplace()`, which, as its name
+implies, either creates the `Deployment` on the cluster or replaces it with the new values if the `Deployment` already
+exists. Easy enough.
+
+The `createMetadata()` method is in charge of setting the labels, but also needs to set the owner reference on your
+dependent resources:
 
 ```java,noformat
-private ObjectMeta createMetadata(ExposedApp resource,Map<String, String> labels){
+private ObjectMeta createMetadata(ExposedApp resource, Map<String, String> labels){
     final var metadata=resource.getMetadata();
     return new ObjectMetaBuilder()
         .withName(metadata.getName())
@@ -269,11 +289,11 @@ private ObjectMeta createMetadata(ExposedApp resource,Map<String, String> labels
 }
 ```
 
-The `Service` would be created in a similar fashion:
+The `Service` is created in a similar fashion:
 
 ```java,noformat
 client.services().createOrReplace(new ServiceBuilder()
-        .withMetadata(createMetadata(resource,labels))
+        .withMetadata(createMetadata(exposedApp, labels))
         .withNewSpec()
             .addNewPort()
                 .withName("http")
@@ -286,11 +306,11 @@ client.services().createOrReplace(new ServiceBuilder()
 .build());
 ```
 
-The `Ingress` is slightly more complex because it actually depends on
-which [`Ingress` controller](https://kubernetes.io/fr/docs/concepts/services-networking/ingress/) is deployed on your
-cluster. In this example, you'll be configuring the `Ingress` specifically for
+The `Ingress` is slightly more complex because it depends on
+which [Ingress controller](https://kubernetes.io/docs/concepts/services-networking/ingress/) is deployed on your
+cluster. In this example, you're configuring the `Ingress` specifically for
 the [NGINX controller](https://kubernetes.github.io/ingress-nginx/). If your cluster uses a different controller, the
-configuration will be different:
+configuration would probably be different:
 
 ```java,noformat
 final var metadata = createMetadata(exposedApp, labels);
@@ -320,47 +340,54 @@ client.network().v1().ingresses().createOrReplace(new IngressBuilder()
 .build());
 ```
 
-And that's about it for this very simple reconciliation algorithm! The only thing you need to do is return an
-`UpdateControl` to JOSDK know what to do with your CR once it's reconciled. In this case, you're not modifying the CR in
-any form, so you simply return `UpdateControl.noUpdate()`. JOSDK now knows that it doesn't need to send an updated
-version of your CR to the cluster and can update its internal state accordingly.
+And that's about it for this very simple reconciliation algorithm. The only thing left to do is return
+an `UpdateControl` to let JOSDK know what to do with your CR after it's reconciled. In this case, you're not modifying
+the CR in any form, so you simply return `UpdateControl.noUpdate()`. JOSDK now knows that it doesn't need to send an
+updated version of your CR to the cluster and can update its internal state accordingly.
 
-At this point, your operator should still be running using the Quarkus dev mode. If you create an `ExposedApp`
-resource and apply it to the cluster using `kubectl apply`, your operator should now create the associated resources as
-you can see running the following command:
+At this point, your Operator should still be running using Quarkus dev mode. If you create an `ExposedApp`
+resource and apply it to the cluster using `kubectl apply`, your Operator should now create the associated resources, as
+you can see by running the following command:
 
 ```shell
-kubectl get all -l app.kubernetes.io/name=<name of your CR>
+$ kubectl get all -l app.kubernetes.io/name=<name of your CR>
 ```
 
-If everything worked well, you should indeed see that a `Pod`, a `Service`, a `Deployment` and a `ReplicaSet` have all
-been created for your application. `Ingresses` are not part of the resources that are displayed by a `kubectl get all`
-so you'd need a separate command to check on your `Ingress`:
+If everything worked well, you should indeed see that a `Pod`, a `Service`, a `Deployment`, and a `ReplicaSet` have all
+been created for your application. The `Ingress` is not part of the resources displayed by the `kubectl get all`
+command, so you need a separate command to check on your `Ingress`:
 
 ```shell
-kubectl get ingresses.networking.k8s.io -l app.kubernetes.io/name=<name of your CR>
+$ kubectl get ingresses.networking.k8s.io -l app.kubernetes.io/name=<name of your CR>
 ```
 
-When writing this article, we created a `hello-quarkus` `ExposedApp` that exposes a simple "Hello World" Quarkus
-application and got the following result:
+When writing this article, the author created a `hello-quarkus` project with an `ExposedApp` that exposes a simple "
+Hello World" Quarkus application, and got the following result:
 
 ```shell
-kubectl get ingresses.networking.k8s.io -l app.kubernetes.io/name=hello-quarkus
+$ kubectl get ingresses.networking.k8s.io -l app.kubernetes.io/name=hello-quarkus
 NAME          CLASS   HOSTS ADDRESS   PORTS AGE
 hello-quarkus <none>  *     localhost 80    9m40s
 ```
 
-Our application exposes a `hello` endpoint and we can indeed verify that accessing http://localhost/hello results in the
-expected greeting!
+This application exposes a `hello` endpoint and visiting `http://localhost/hello` resulted in the expected greeting. For
+your convenience, we put the code of this operator in
+the [https://github.com/halkyonio/exposedapp-rhdblog](https://github.com/halkyonio/exposedapp-rhdblog) repository.
+Future parts of this series will add more to this code but the version specific to this part will always be accessible
+via [the `part-3` tag](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-3).
 
 ## Conclusion
 
-This concludes part 3 of our series. You've finally implemented a very simple operator and learned more about JOSDK in
-the process. If you remember part 1, we said that one interesting aspect of operators is to enable users to deal with a
-Kubernetes cluster via the lens of an API customized to their needs and comfort level with Kubernetes clusters. In the
-use case we chose for this blog series, this simplified view is materialized by the `ExposedApp` API. However, as you
-can see above, while you've simplified exposing an application via only its image reference, knowing **where** to access
-the application is not trivial! Similarly, checking if things are working properly requires knowing about labels and how
-to retrieve associated resources from the cluster. Not difficult, but your operator only fulfills one part of its
-contract! That's why the next article in this series will look into adding that information to your CR so that your
-users really only need to deal with your Kubernetes extension and nothing else!
+This concludes part 3 of our series. You've finally implemented a very simple Operator and learned more about JOSDK in
+the process.
+
+In part 1, you learned that one interesting aspect of Operators is that they enable users to deal with a Kubernetes
+cluster via the lens of an API customized to their needs and comfort level with Kubernetes clusters. In the use case we
+chose for this series, this simplified view is materialized by the `ExposedApp` API. However, this article has
+demonstrated that, although the tools you've used have made it easier to expose an application via only its image
+reference, knowing *where* to access the application is not trivial.
+
+Similarly, checking whether things are working properly requires knowing about labels and how to retrieve associated
+resources from the cluster. The process is not difficult, but your Operator currently fulfills only one part of its
+contract. Thus, the next article in this series will look into adding that information to your CR so that your users
+really need to deal only with your Kubernetes extension and nothing else.
