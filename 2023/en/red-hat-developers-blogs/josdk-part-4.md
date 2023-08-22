@@ -1,4 +1,4 @@
-# Java Operator SDK: introducing `EventSources`
+# Writing Kubernetes Operators in Java with JOSDK, Part 4: Upgrading strategies and status handling
 
 [Java Operator SDK](https://javaoperatorsdk.io), or JOSDK, is an open source project that aims to simplify the task of
 creating Kubernetes Operators using Java. The project was started
