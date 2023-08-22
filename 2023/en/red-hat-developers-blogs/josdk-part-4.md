@@ -20,18 +20,143 @@ support for updating the custom resource's status and introduce the `EventSource
 You implemented a simple Operator exposing your application via an `Ingress`. However, while this simplified exposing
 the application, you still need to know **where** to access the application or how to find that information!
 Similarly, it might take some time for the cluster to achieve the desired state. In the mean time, users are left
-wondering if things are working properly. To check on the progress status, one needs to know about which labels the
-Operator set and how to retrieve the associated resources. From this perspective, your Operator only fulfills one part
-of its contract because it doesn't properly encapsulates the complexity of dealing with the cluster. How could you fix
-this problem?
+wondering if things are working correctly.
+
+If you recall properly, you added labels to the components your Operator created. While you could indeed use these
+labels to check on the status of your application and its components, wouldn't it be nicer if you could simply
+interact with the API we created? Our goal, developing this Operator, is, after all, to simplify interacting with the 
+cluster… From this perspective, your Operator only fulfills one part of its contract because it doesn't properly
+encapsulates the complexity of dealing with the cluster. How could you fix this problem?
+
+First, though, as it's been a while, you should upgrade to the latest versions of JOSDK, QOSDK and Quarkus, 
+respectively to benefit from the bug fixes and new features that were introduced since we last looked at the code.
+
+## Updating to the latest versions
+
+### Using `quarkus update`
+
+Upgrading a project is always a tricky proposition, especially when there's a wide gap between the old and new 
+versions. Quarkus helps you here as well, though. In this case, you want to migrate from Quarkus 2.7.3.Final to the 
+latest version, which at the time of the writing of this article, is 3.2.4.Final. You can use the `update` command 
+that Quarkus provides. If you have the `quarkus` command line tool, you might want to upgrade this first and then 
+simply run `quarkus dev`. Otherwise, using maven only, you can run:
+
+```shell
+mvn io.quarkus.platform:quarkus-maven-plugin:3.2.4.Final:update -N
+```
+  
+The complete procedure is detailed in the [related Quarkus guide](https://quarkus.io/guides/update-quarkus).
+
+In your case, though, you should notice that the update procedure fails with an error when the command attempts to 
+check the updated project:
+
+```shell
+[INFO] [ERROR] [ERROR] Some problems were encountered while processing the POMs:
+[INFO] [ERROR] 'dependencies.dependency.version' for io.quarkiverse.operatorsdk:quarkus-operator-sdk-csv-generator:jar is missing. @ line 38, column 17
+```
+ 
+### Updating outdated QOSDK dependency
+
+This is due to the fact that this dependency doesn't exist anymore, which the project actually doesn't need at this 
+point, though it's included by default when bootstrapping a QOSDK project using the `operator-sdk` CLI. This 
+dependency is here to allow automatic generation of 
+[Operator Lifecycle Manager (OLM)](https://olm.operatorframework.io/) bundles, which enables you to manage the 
+lifecycle of your Operator on OLM-enabled clusters. We might discuss this feature in greater detail in a future blog.
+Right now, to fix your project, you need to either remove the dependency altogether if you're not interested in the
+feature, or change it to the correct one, as it actually has been renamed to reflect its scope better (the 
+dependency name focused initially on only the 
+[`ClusterServiceVersion`](https://olm.operatorframework.io/docs/concepts/crds/clusterserviceversion/) 
+part of OLM bundles). The feature was actually disabled using `quarkus.operator-sdk.generate-csv=false` in the 
+`application.properties` file.
+
+The new dependency name is `quarkus-operator-sdk-bundle-generator` so that's what you use if you want to use the 
+OLM generation feature. Note that you will also need to change the associated property name to activate the 
+feature (you'll see a warning in the logs that the property doesn't exist if you don't and the OLM generation will 
+be activated by default). The new property is named `quarkus.operator-sdk.bundle.enabled`.
+
+After making these changes, if you re-run the update command, it should now succeed, with an output 
+similar to:
+
+```shell
+[INFO] Detected project Java version: 11
+[INFO] Quarkus platform BOMs:
+[INFO]         io.quarkus:quarkus-bom:pom:3.2.4.Final ✔
+[INFO] Add:    io.quarkus.platform:quarkus-operator-sdk-bom:pom:3.2.4.Final
+[INFO] 
+[INFO] Extensions from io.quarkus:quarkus-bom:
+[INFO]         io.quarkus:quarkus-micrometer-registry-prometheus ✔
+[INFO] 
+[INFO] Extensions from io.quarkus.platform:quarkus-operator-sdk-bom:
+[INFO] Update: io.quarkiverse.operatorsdk:quarkus-operator-sdk-bundle-generator:6.3.0 -> remove version (managed)
+[INFO] Update: io.quarkiverse.operatorsdk:quarkus-operator-sdk:6.3.0 -> remove version (managed)
+```
+ 
+### Strategies to deal with QOSDK and Quarkus updates
+
+Looking at what was done, you see that you can actually simplify things even further. It is advising you to add the `io.
+quarkus.platform:quarkus-operator-sdk-bom:pom:3.2.4.Final` dependency. Indeed, QOSDK has been added to the Quarkus 
+platform, making it easier to consume from a given Quarkus version. Switching to this BOM allows you to only decide 
+which version of Quarkus to use and the BOM will make sure you get the appropriate QOSDK version. Previously, you 
+needed to make sure the QOSDK version you imported from the QOSDK BOM was compatible with the Quarkus version you 
+wanted to use. Using the platform QOSDK BOM fixes that issue. However, in that case, you also need to add the 
+Quarkus BOM itself (which was automatically imported for you when you use the QOSDK BOM directly, though you had to 
+manually add the `quarkus.version` property and set it to the correct value in that case).
+
+That said, you can also see that it is letting us know that there is a more recent version of the QOSDK extension (6.
+3.0), which isn't however available yet via the Quarkus platform. If you wish to keep using the Quarkus platform, you 
+will use the version that is verified to work with the platform as a whole. That QOSDK version might not be the 
+latest, though. 
+
+If you wish to use the absolute latest version of QOSDK, you keep the approach of using the BOM provided by QOSDK 
+itself, just making sure to update the Quarkus version using the `quarkus.version`, while updating the QOSDK version 
+using the `quarkus-sdk.version` property in your `pom.xml` file as was previously done. 
+
+Which approach to choose depends on your appetence for risk or how you wish to manage your dependencies. Generally 
+speaking, though, the Quarkus platform is updated frequently and QOSDK versions are usually updated accordingly as 
+needed. That said, patch version updates should work without issues. Moving QOSDK up a minor version from the one 
+proposed by the Quarkus should typically work as well (the project tried to ensure backwards compatibility between 
+minor versions). Upgrading Quarkus to a minor version above (e.g. from 3.2.x to 3.3.x) might prove more tricky, 
+though, as the Fabric8 Kubernetes client version used by that new Quarkus version might also have been updated to a 
+new minor version and these have been known to bring API changes, so you might want to tread carefully with such 
+updates.
+
+QOSDK actually issues debug-level warnings when it detects version mismatches (minor version and above, patch 
+level mismatches being considered safe) between Quarkus, JOSDK and Fabric8 Kubernetes client. You can even configure 
+it to fail a build by setting the `quarkus.operator-sdk.fail-on-version-check` to `true`. Please refer to the 
+[documentation](https://docs.quarkiverse.io/quarkus-operator-sdk/dev/index.html#quarkus-operator-sdk_quarkus.operator-sdk.fail-on-version-check)
+for more details.
+
+### Adapting to Fabric8 Kubernetes Client changes
+
+If you try to build now, you should get a compilation error, due to an API change in the Fabric8 Kubernetes client:
+
+```java
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.8.1:compile (default-compile) on project expose: Compilation failure
+[ERROR] exposedapp-rhdblog/src/main/java/io/halkyon/ExposedAppReconciler.java:[63,33] cannot find symbol
+[ERROR]   symbol:   method withIntVal(int)
+[ERROR]   location: interface io.fabric8.kubernetes.api.model.ServicePortFluent.TargetPortNested<io.fabric8.kubernetes.api.model.ServiceSpecFluent.PortsNested<io.fabric8.kubernetes.api.model.ServiceFluent.SpecNested<io.fabric8.kubernetes.api.model.ServiceBuilder>>>
+```
+ 
+This issue is easily fixed by changing this line:
+
+```java
+.withNewTargetPort().withIntVal(8080).endTargetPort()
+```
+to simply: 
+
+```java
+.withNewTargetPort(8080)
+```
+
+You should now be all set for the updates!
 
 ## Adding a status to your custom resource
 
-Remember that when we discussed how to model custom resources (CR), we mentioned that JOSDK enforces the best practices
+Remember that when we discussed how to model custom resources (CR), we mentioned that JOSDK enforces the best practice
 of separating desired from actual state, each materialized by separate CR fields: `spec` and `status` respectively. Your
-operator correctly achieves the desired state by extracting the information specified by the user in the `spec`
-field. However, it fails to report the actual state of the cluster, which is the second part of its contract. The CR
-status is meant exactly for this purpose.
+operator models the desired state by extracting the information specified by the user in the `spec`
+field. However, it fails to report the actual state of the cluster, which is the second part of its contract. That's 
+where the `status` field comes into play.
 
 For reference, here's the code as you left it at the end of part 3:
 [the `part-3` tag](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-3) of the
@@ -41,10 +166,10 @@ dev` if you've installed the [Quarkus CLI](https://quarkus.io/guides/cli-tooling
 
 You're going to add two `host` and `message` fields to your `ExposedAppStatus` class, which we leave as an exercise
 to you. If the `Ingress` exists and its status indicates that it has been properly handled by the associated
-controller, you'll update the `message` field to set it to state that the application is indeed exposed and put the
-associated host name to the `host` field. Otherwise, you'll simply set the message to "processing" to let the user 
-know that the `ExposedApp` CR has indeed been taken into account. Then you'll simply return `UpdateControl.
-updateStatus` passing it your CR with the updated status to let JOSDK know that it needs to send the status change 
+controller, you'll update the `message` field to state that the application is indeed exposed and put the
+associated host name to the `host` field. Otherwise, you'll simply set the message to "processing" to let the user
+know that the `ExposedApp` CR has indeed been taken into account. You'll then simply return `UpdateControl.
+updateStatus` passing it your CR with the updated status to let JOSDK know that it needs to send the status change
 to the cluster. Replace the `return UpdateControl.noUpdate();` line in your `reconcile` method by:
 
 ```java,noformat
@@ -70,9 +195,8 @@ to the cluster. Replace the `return UpdateControl.noUpdate();` line in your `rec
 where `DEFAULT_STATUS` is a constant declared as:
 
 ```java
-private static final ExposedAppStatus DEFAULT_STATUS = new ExposedAppStatus("processing",null);
+private static final ExposedAppStatus DEFAULT_STATUS=new ExposedAppStatus("processing",null);
 ```
-   
 
 #### TODO
 
