@@ -17,10 +17,11 @@ support for updating the custom resource's status and introduce the `EventSource
 
 ## Where things stand
 
-You implemented a simple Operator exposing your application via an `Ingress`. However, while this simplified exposing
-the application, you still need to know **where** to access the application or how to find that information!
-Similarly, it might take some time for the cluster to achieve the desired state. In the mean time, users are left
-wondering if things are working correctly.
+You implemented a simple Operator exposing your application outside the cluster via an `Ingress`, creating the 
+associated `Deployment` and `Service` along the way. However, while this simplified exposing the application, you 
+still need to know **where** to access the application or how to find that information! Similarly, it might take 
+some time for the cluster to achieve the desired state. In the mean time, users are left wondering if things are
+working correctly.
 
 If you recall properly, you added labels to the components your Operator created. While you could indeed use these
 labels to check on the status of your application and its components, wouldn't it be nicer if you could simply
@@ -29,7 +30,9 @@ cluster… From this perspective, your Operator only fulfills one part of its co
 encapsulates the complexity of dealing with the cluster. How could you fix this problem?
 
 First, though, as it's been a while, you should upgrade to the latest versions of JOSDK, QOSDK and Quarkus, 
-respectively to benefit from the bug fixes and new features that were introduced since we last looked at the code.
+respectively to benefit from the bug fixes and new features that were introduced since we last looked at the code. 
+You can skip to ****LINK TO SECTION WITH UPDATED CODE**** if you want to go straight to the updated code version and 
+jump right to how to manage the status.
 
 ## Updating to the latest versions
 
@@ -147,26 +150,33 @@ to simply:
 ```java
 .withNewTargetPort(8080)
 ```
-
-You should now be all set for the updates!
+You should now be all set for the updates: onward to adding status support to your API!
 
 ## Adding a status to your custom resource
 
-Remember that when we discussed how to model custom resources (CR), we mentioned that JOSDK enforces the best practice
-of separating desired from actual state, each materialized by separate CR fields: `spec` and `status` respectively. Your
-operator models the desired state by extracting the information specified by the user in the `spec`
+Remember that when we discussed how to model custom resources (CR), we mentioned that JOSDK enforces the best 
+practice of separating desired from actual state, each materialized by separate CR fields: `spec` and `status` 
+respectively. Your operator models the desired state by extracting the information specified by the user in the `spec`
 field. However, it fails to report the actual state of the cluster, which is the second part of its contract. That's 
 where the `status` field comes into play.
 
-For reference, here's the code as you left it at the end of part 3:
-[the `part-3` tag](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-3) of the
+For reference, here's the 
+[updated code](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-4-init) 
+after the changes made to update what you developed in
+[part 3](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-3) of the
 [https://github.com/halkyonio/exposedapp-rhdblog](https://github.com/halkyonio/exposedapp-rhdblog) repository.
+
 If you haven't started your operator using the Quarkus Dev mode, please do so again (`mvn quarkus:dev` or `quarkus
 dev` if you've installed the [Quarkus CLI](https://quarkus.io/guides/cli-tooling)).
 
-You're going to add two `host` and `message` fields to your `ExposedAppStatus` class, which we leave as an exercise
-to you. If the `Ingress` exists and its status indicates that it has been properly handled by the associated
-controller, you'll update the `message` field to state that the application is indeed exposed and put the
+You're going to add two `host` and `message` String fields to your `ExposedAppStatus` class, which we leave as an
+exercise to you, also adding a constructor taking both parameters for good measure (note that you'll still need a 
+default constructor for serialization purposes).
+If the `Ingress` 
+resource has properly been created by 
+your Operator and its status 
+indicates
+that it has been properly handled by the associated controller, you'll update the `message` field to state that the application is indeed exposed and put the
 associated host name to the `host` field. Otherwise, you'll simply set the message to "processing" to let the user
 know that the `ExposedApp` CR has indeed been taken into account. You'll then simply return `UpdateControl.
 updateStatus` passing it your CR with the updated status to let JOSDK know that it needs to send the status change
@@ -179,7 +189,7 @@ to the cluster. Replace the `return UpdateControl.noUpdate();` line in your `rec
       final var ingresses = s.getLoadBalancer().getIngress();
       if (ingresses != null && !ingresses.isEmpty()) {
         // only set the status if the ingress is ready to provide the info we need
-        LoadBalancerIngress ing = ingresses.get(0);
+        var ing = ingresses.get(0);
         String hostname = ing.getHostname();
         final var url = "https://" + (hostname != null ? hostname : ing.getIp());
         log.info("App {} is exposed and ready to used at {}", name, url);
@@ -195,25 +205,33 @@ to the cluster. Replace the `return UpdateControl.noUpdate();` line in your `rec
 where `DEFAULT_STATUS` is a constant declared as:
 
 ```java
-private static final ExposedAppStatus DEFAULT_STATUS=new ExposedAppStatus("processing",null);
+private static final ExposedAppStatus DEFAULT_STATUS=new ExposedAppStatus("processing", null);
 ```
 
-#### TODO
+Once that's done, if you already have an `ExposedApp` on your cluster / namespace, please either modify or re-create 
+it so that you can observe the new behavior of your Operator.
 
-Détruisons notre CR pour pouvoir ensuite la re-créer et observer le comportement de notre "controller"
-via `kubectl delete exposedapps.halkyon.io hello-quarkus`.
+NOTE: It is important to make sure your Operator is running if you delete your CR. By default, JOSDK configures 
+controllers to automatically add 
+[finalizers](https://kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/) to the CRs they handle 
+so that the associated controller has a chance to perform any cleaning operation it might need before the resource 
+is actually deleted. Resources with finalizers are therefore deleted only when all their finalizers are removed by 
+the controllers that added them, thus signaling to Kubernetes that all controllers are OK with the resource being 
+deleted. Of course, a controller can only agree to the resource deletion if it is running. Attempting to delete a 
+resource with a finalizer, associated with a non-running controller, will thus block the deletion until that 
+controller can signal whether that deletion is acceptable. See the 
+[JOSDK documentation](https://javaoperatorsdk.io/docs/getting-started) for more details on how it handles 
+[finalizers](https://javaoperatorsdk.io/docs/features#finalizer-support).
 
-NOTE: Il est important que notre controller soit actif quand nous effaçons la CR. En effet, par défaut, JOSDK configure
-les "controllers" pour qu'ils ajoutent un "finalizer" aux CRs qu'ils contrôlent: tant que le "finalizer" n'est pas
-enlevé de la CR, celle-ci ne peut être détruite et comme, normalement, un "finalizer" ne peut être enlevé que par le "
-controller" qui l'a placé, il est nécessaire que le "controller" soit actif au moment où l'on veut effacer notre CR (ou
-alors, il faut relancer le "controller" pour que celui-ci fasse le nécessaire une fois la CR marquée comme devant être
-détruite). Voir [https://kubernetes.io/blog/2021/05/14/using-finalizers-to-control-deletion/] pour plus de détails sur
-les "finalizers".
+Once the CR is updated or re-created, you'll notice, however, that, wait as you may, the logging message you'd 
+expect to see, that your application has correctly been exposed, never occurs. Examine your CR (called 
+`hello-quarkus` in the precedent parts) using:
 
-Une fois la CR ré-appliquée sur le cluster (avec `kubectl apply`), nous avons beau attendre, le logging ne nous indique
-jamais que l'application est exposée. De même, si nous examinons notre CR
-via `kubectl describe exposedapps.halkyon.io hello-quarkus`, nous voyons le résultat suivant:
+```shell
+kubectl describe exposedapps.halkyon.io hello-quarkus
+```
+
+You should get the following result:
 
 ```shell
 Name:         hello-quarkus
@@ -224,98 +242,191 @@ Status:
 ...
 ```
 
-Pourtant, si nous attendons suffisamment longtemps (quelques dizaines de secondes en général), notre application est
-bien disponible mais il ne semble pas que notre "controller" soit appelé pour mettre à jour le statut. Ceci est en fait
-compréhensible: notre "controller" n'est appelé que pour des évènements concernant les CR `ExposedApp`; or, dans notre
-cas, nous voudrions que notre "controller" soit appelé quand l'`Ingress` que nous avons créé est mis à jour.
+However, unless there's a problem with your cluster setup, if you wait long enough (usually a matter of a dozen of 
+seconds), you can easily verify that your application is indeed exposed. It doesn't appear, though, that your 
+controller got notified and thus didn't get a chance to update the CR's status.
 
-Nous pouvons faire ceci avec JOSDK grâce au concept d'`EventSource` qui représente une source d'évènements associés à un
-type de CR donné. Dans notre cas, nous voulons écouter les évènements affectant les `Ingress` avec le "label"
-correspondant à notre application. En créant une telle source, et en l'enregistrant auprès de notre "controller" via la
-méthode `init`, JOSDK appelera également notre "controller" dans ce cas.
+Stepping back a little, though, this behavior is completely normal: your controller is only notified of events 
+pertaining to `ExposedApp` resources. In this instance, though, the change that your controller is interested in 
+being notified about occurs on the `Ingress` resource associated with your primary `ExposedApp` resource. Ideally, 
+you'd like your controller to also get notified when some or all of the secondary/dependent resources associated 
+with your primary resource are changed.
 
-Ajoutons donc une implémentation d'`EventSource` à notre application. Nous allons utiliser un `Watcher` pour écouter les
-évènements de type `Ingress` et ensuite émettre un nouvel évènement de type `IngressEvent` que nous demanderons au JOSDK
-de prendre en compte via son `EventHandler`. Pour nous faciliter la tâche, nous étendrons la
-classe `AbstractEventSource` fournie par le SDK:
+JOSDK takes care of this problem by introducing the 
+[event source concept](https://javaoperatorsdk.io/docs/features#handling-related-events-with-event-sources). 
+An event source (an implementation of the 
+`EventSource` interface in JOSDK) represents a source of events associated with a given CR type. For the 
+`ExposedApp` controller, you want an event source associated with `Ingress` resources, not just any such resources, 
+but ones with the label that you added to your secondary resources so that your controller won't get notified of 
+events on `Ingress` resources that have nothing to do with our `ExposedApp` CRs. By associating such an event source 
+to your controller, JOSDK will take care of calling your controller whenever events occur on secondary resources 
+associated with your primary `ExposedApp` resources.
+
+JOSDK provides 
+[several `EventSource` implementations](https://javaoperatorsdk.io/docs/features#built-in-eventsources) out of the 
+box to cover common use cases, some dealing with watching events on Kubernetes resources but also ones meant to 
+allow controllers to react to events happening outside of the cluster, which is a really powerful feature.
+ 
+Let's start with a very low-level event source implementation so that you can take a peak at how JOSDK handles 
+events. You will implement a
+[Fabric8 client `Watcher`](https://github.com/fabric8io/kubernetes-client/blob/main/kubernetes-client-api/src/main/java/io/fabric8/kubernetes/client/Watcher.java)
+based `EventSource`:
 
 ```java
-public class IngressEventSource extends AbstractEventSource implements Watcher<Ingress> {
-...
-
-    public static IngressEventSource create(KubernetesClient client) {
-        final var eventSource = new IngressEventSource(client);
-        client.network().v1().ingresses().withLabel(ExposedAppController.APP_LABEL).watch(eventSource);
-        return eventSource;
-    }
+public static class IngressEventSource implements EventSource, Watcher<Ingress> {
+    private EventHandler handler;
 
     @Override
     public void eventReceived(Action action, Ingress ingress) {
-        final var uid = ingress.getMetadata().getOwnerReferences().get(0).getUid();
         final var status = ingress.getStatus();
         if (status != null) {
             final var ingressStatus = status.getLoadBalancer().getIngress();
             if (!ingressStatus.isEmpty()) {
-                eventHandler.handleEvent(new IngressEvent(uid, this));
+                ResourceID.fromFirstOwnerReference(ingress).ifPresent(resourceID -> handler.handleEvent(new Event(resourceID)));
             }
         }
-    }  
-    ...
+    }
+
+    @Override
+    public void onClose(WatcherException e) {
+    }
+
+    @Override
+    public void setEventHandler(EventHandler eventHandler) {
+        this.handler = eventHandler;
+    }
+
+    @Override
+    public void start() throws OperatorException {
+
+    }
+
+    @Override
+    public void stop() throws OperatorException {
+
+    }
 }
 ```
 
-Nous associons ensuite notre `EventSource` à notre "controller" en implémentant sa méthode `init`:
+Let's look at the details. First, quite logically, your `EventSource` needs to implement the 
+[`EventSource` interface](https://github.com/operator-framework/java-operator-sdk/blob/main/operator-framework-core/src/main/java/io/javaoperatorsdk/operator/processing/event/source/EventSource.java)
+which means that you have to implement 3 methods: `setEventHandler` (the only one we care about here), `start` and 
+`stop`, these last two being only needed if you need to have code that runs whenever the associated reconciler 
+starts or stops, which you don't need to worry about here. The `setEventHandler` method will be called automatically 
+by the SDK when your event source gets registered and will provide an 
+[`EventHandler`](https://github.com/operator-framework/java-operator-sdk/blob/main/operator-framework-core/src/main/java/io/javaoperatorsdk/operator/processing/event/EventHandler.java)
+instance that your event source can use to ask JOSDK to potentially trigger your reconciler as you will see. 
+Typically, you only need to record that instance so that your event source can refer to it when needed. Note that 
+all this is fairly common to all `EventSource` implementations and, recognizing this, JOSDK provides an 
+`AbstractEventSource` class that takes care of these details (you could have used this but we wanted to stay at the 
+lowest abstract level possible first). 
+
+Next, your event source needs to implement the `Watcher` interface, meaning that the Fabric8 
+client will call your `EventSource` `eventReceived` method whenever an event occurs for `Ingress` events. You want 
+to trigger the reconciler only if the `Ingress` has a status and that it contains the information you need to 
+extract the address at which the application will be exposed (which can be extracted from the `status.loadBalancer.
+ingress` field). 
+
+Assuming this condition is satisfied, you then need to identify which of your CRs should be 
+associated with that event so that the SDK can retrieve it and trigger your reconciler with it. In this case, 
+remember that you added an owner reference to your secondary resources in Part 3. The owner reference records the 
+identifier of the primary resource with which the secondary resource is associated. That's what you will use here, 
+creating a `ResourceID` using `ResourceID.fromFirstOwnerReference`. Assuming an owner reference is found, we can now 
+call the `EventHandler`.
+
+Finally, you need some way to tell JOSDK about your event source. This is done by making your reconciler implement 
+the `EventSourceInitializer` interface, parameterized using the class of your primary resource (`ExposedApp`). This, 
+in turn, means you need to implement the 
+`public Map<String, EventSource> prepareEventSources(EventSourceContext<ExposedApp> eventSourceContext)` method. A 
+reconciler can (and very often does, though this is not the case in this simple example) require several event 
+sources to get notified whenever events occur that it needs to handle. `prepareEventSources` is the method JOSDK 
+uses is to learn which event sources your reconciler requires, each associated with a unique name identifying it 
+(which is why the method returns a `Map`).
+
+In your case, you still need to do two things. First, tell Fabric8 to start watching `Ingress` events, letting it know 
+that it should call your event source. To do this, implement the following method:
 
 ```java
-public void init(EventSourceManager eventSourceManager){
-        eventSourceManager.registerEventSource("exposedapp-ingress-watcher",IngressEventSource.create(client));
-        }
+  public static IngressEventSource create(KubernetesClient client) {
+        final var eventSource = new IngressEventSource();
+        client.network().v1().ingresses().watch(eventSource);
+        return eventSource;
+    }
 ```
 
-Détruisons encore une fois notre CR et ajoutons la à nouveau:
+The second thing you need to do is to implement the `prepareEventSources` method, returning a named instance of your 
+`IngressEventSource` class, as follows, retrieving the Fabric8 client instance you need from the 
+`EventSourceContext` instance provided by JOSDK when the method gets called:
+
+```java
+    @Override
+    public Map<String, EventSource> prepareEventSources(EventSourceContext<ExposedApp> eventSourceContext) {
+        return Map.of("ingress-event-source",IngressEventSource.create(eventSourceContext.getClient()));
+    }
+```
+
+That should do it. If you left your operator running using Quarkus Dev Mode while writing the code, it should 
+restart and, if you delete your CR and re-create it, after a while, you should see more logging happening in the 
+console, seeing that your reconciler is actually called several times, each time an event that the SDK thinks might 
+be of interest to it happens. After a few seconds, the condition you're waiting for should happen and the reconciler 
+should log the address at which your app is now available. If you check your CR, using 
 
 ```shell
-[io.hal.ExposedAppController] (EventHandler-exposedapp) Exposing hello-quarkus application from image localhost:5000/quarkus/hello
-INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Deployment hello-quarkus handled
-INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Service hello-quarkus handled
-INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Ingress hello-quarkus handled
-INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Exposing hello-quarkus application from image localhost:5000/quarkus/hello
-INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Deployment hello-quarkus handled
-INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Service hello-quarkus handled
-INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) Ingress hello-quarkus handled
-INFO  [io.hal.ExposedAppController] (EventHandler-exposedapp) App hello-quarkus is exposed and ready to used at https://localhost
+kubectl describe exposedapps.halkyon.io
 ```
-
-Nous voyons donc que notre "controller" est appelé une première fois lorsque notre CR est créée puis, contrairement à
-précédemment, appelé une seconde fois lorsque l'`Ingress` change de statut et nous avons bien le "logging" que nous
-espérions.
-
-De même si nous examinons notre CR, nous pouvons constater que son statut a bien été mis à jour:
+you should see something similar to:
 
 ```shell
 Name:         hello-quarkus
 Namespace:    default
-...
+Labels:       <none>
+Annotations:  <none>
+API Version:  halkyon.io/v1alpha1
+Kind:         ExposedApp
+Metadata:
+  Creation Timestamp:  2023-08-26T15:47:15Z
+  Generation:          1
+  Resource Version:    15120950
+  UID:                 7e08e5d6-4830-4d5b-b412-430b33f3c432
+Spec:
+  Image Ref:  quay.io/metacosm/hello:1.0.0-SNAPSHOT
 Status:
-  Host:     https://localhost
-  Message:  exposed
-...
+  Host:     exposed
+  Message:  https://192.168.1.15
+Events:     <none>
 ```
 
-## Conclusion
+That was quite a bit of work, even though JOSDK takes care of lots of details for you already. However, this code 
+leaves a lot to desire in terms of error handling, for example. Luckily, JOSDK provides an `EventSource` 
+implementation that is optimized to handle Kubernetes resources, based on Fabric8's
+[`SharedInformer`](https://github.com/fabric8io/kubernetes-client/blob/main/doc/CHEATSHEET.md#sharedinformers) which 
+implements many commonly used patterns and optimizations so that you can focus on your 
+controller's logic: [InformerEventSource](https://javaoperatorsdk.io/docs/features#informereventsource).
 
-Ainsi se termine notre introduction au monde des opérateurs écrits en Java. Après avoir expliqué l’intérêt pour les
-développeurs Java de pouvoir interagir avec Kubernetes en utilisant un langage de programmation et des outils familiers,
-nous avons vu comment il est facilement possible d'étendre Kubernetes en lui ajoutant de nouvelles APIs grâce à JOSDK
-qui nous a permis de nous concentrer sur l’aspect métier de notre opérateur. Nous avons également brièvement entraperçu
-l’intérêt de l’extension Quarkus qui nous a permis de développer notre opérateur alors qu’il tournait, nous permettant
-ainsi d’avoir une boucle de retour rapide et d'itérer sur le code de l'opérateur efficacement. Il y aurait, bien
-évidemment, d'autres points à aborder tels que comment tester notre opérateur, sa mise en production ou même la
-compilation native mais nous avons préféré nous concentrer ici sur la partie développement. Le projet Java Operator SDK
-est encore jeune et nous travaillons continuellement à son amélioration pour rendre la programmation d’opérateurs en
-Java toujours plus facile. Vous pouvez retrouver le project à [https://github.com/java-operator-sdk/java-operator-sdk].
-Le code complet de l’opérateur que nous avons développé dans cet article est, quant à lui, disponible
-sur [https://github.com/halkyonio/exposedapp]. Par ailleurs, l’équipe de JOSDK travaille sur une version 2 du SDK, les
-changements peuvent être discutés à [https://github.com/java-operator-sdk/java-operator-sdk/discussions/681]. 
+All the work you did above could be replaced by only the following code:
+
+```java
+@Override
+public Map<String,EventSource> prepareEventSources(EventSourceContext<ExposedApp> eventSourceContext) {
+    return EventSourceInitializer.nameEventSources(new InformerEventSource<>(InformerConfiguration.from(Ingress.class).build(), eventSourceContext));
+}
+```
+
+even asking JOSDK to generate a name automatically for your event source. The only thing that's needed is to 
+configure it to listen to `Ingress` events, though a lot more can be configured, if needed, using: 
+`InformerConfiguration.from(Ingress.class).build()`.
+
+## Conclusion
+ 
+This concludes part 4 of our seriesl. You've covered quite a bit of ground, looking at how to upgrade your code to the 
+latest versions of Quarkus and JOSDK but also scratching the surface of what can be accomplished using event sources 
+so that your Operator can react to multiple, varied conditions, both affecting Kubernetes resources but also, though 
+this didn't get covered here, external resources.
+
+You implemented an `EventSource` from scratch first and then used one of the bundled implementations, 
+`InformerEventSource` optimized to deal with common patterns used when dealing with Kubernetes resources. However, 
+your reconciler is still very simple and doesn't deal very well with error conditions and is not optimized as the 
+secondary resources it needs are always created and sent to the cluster even though this isn't always needed. In the 
+next part, we will see how JOSDK could help with this situation.
 
 
