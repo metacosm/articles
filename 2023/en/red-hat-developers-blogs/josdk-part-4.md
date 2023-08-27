@@ -9,11 +9,13 @@ Native Computing Foundation (CNCF)](https://cncf.io) incubating project.
 The [first article in this series](https://developers.redhat.com/articles/2022/02/15/write-kubernetes-java-java-operator-sdk)
 introduced JOSDK and explained why it could be interesting to create Operators in Java. The
 [second article](https://developers.redhat.com/articles/2022/03/22/write-kubernetes-java-java-operator-sdk-part-2) showed how
-the [Quarkus extension `quarkus-operator-sdk`](https://github.com/quarkiverse/quarkus-operator-sdk), also called QOSDK,
-for JOSDK facilitates the development experience by taking care of managing the Custom Resource Definition
+the [JOSDK Quarkus extension `quarkus-operator-sdk`](https://github.com/quarkiverse/quarkus-operator-sdk), also called 
+QOSDK, facilitates the development experience by taking care of managing the Custom Resource Definition
 automatically. The [third article](https://developers.redhat.com/articles/2022/04/04/writing-kubernetes-operators-java-josdk-part-3-implementing-controller) focused on what's required to implement the reconciliation logic
-for the example operator you're building in this series. This article will expand this initial implementation to add
-support for updating the custom resource's status and introduce the `EventSource` concept.
+for the example Operator you're building in this series. This article will first look at updating the code 
+base to use the latest versions of the different projects (since many things have changed since the third 
+article). The article will then expand on the initial implementation to add support for updating the custom 
+resource's status and introduce the `EventSource` concept.
 
 ## Where things stand
 
@@ -31,18 +33,22 @@ encapsulates the complexity of dealing with the cluster. How could you fix this 
 
 First, though, as it's been a while, you should upgrade to the latest versions of JOSDK, QOSDK and Quarkus, 
 respectively to benefit from the bug fixes and new features that were introduced since we last looked at the code. 
-You can skip to ****LINK TO SECTION WITH UPDATED CODE**** if you want to go straight to the updated code version and 
-jump right to how to manage the status.
+You can skip to the [Adding a status to your custom resource](#adding-a-status-to-your-custom-resource) section if you 
+want to go straight to the 
+[updated code version](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-3-updated) and jump right to how to 
+manage the status.
 
 ## Updating to the latest versions
 
 ### Using `quarkus update`
 
 Upgrading a project is always a tricky proposition, especially when there's a wide gap between the old and new 
-versions. Quarkus helps you here as well, though. In this case, you want to migrate from Quarkus 2.7.3.Final to the 
-latest version, which at the time of the writing of this article, is 3.2.4.Final. You can use the `update` command 
-that Quarkus provides. If you have the `quarkus` command line tool, you might want to upgrade this first and then 
-simply run `quarkus dev`. Otherwise, using maven only, you can run:
+versions. Quarkus can help you with this task, though it might not work in all cases. In this case, you want to migrate 
+from Quarkus 2.7.3.Final to the latest version, which at the time of the writing of this article, is 3.2.4.Final. 
+You can use the `update` command that Quarkus provides. If you have the `quarkus` command line tool, you might want 
+to upgrade it first and then simply run `quarkus update`. 
+
+Otherwise, using maven only, you can run:
 
 ```shell
 mvn io.quarkus.platform:quarkus-maven-plugin:3.2.4.Final:update -N
