@@ -35,8 +35,7 @@ First, though, as it's been a while, you should upgrade to the latest versions o
 respectively to benefit from the bug fixes and new features that were introduced since we last looked at the code. 
 You can skip to the [Adding a status to your custom resource](#adding-a-status-to-your-custom-resource) section if you 
 want to go straight to the 
-[updated code version](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-3-updated) and jump right to how to 
-manage the status.
+[updated code version](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-3-updated) and jump right to how to manage the status.
 
 ## Updating to the latest versions
 
@@ -66,17 +65,19 @@ check the updated project:
  
 ### Updating outdated QOSDK dependency
 
-This is due to the fact that this dependency doesn't exist anymore, which the project actually doesn't need at this 
-point, though it's included by default when bootstrapping a QOSDK project using the `operator-sdk` CLI. This 
-dependency is here to allow automatic generation of 
-[Operator Lifecycle Manager (OLM)](https://olm.operatorframework.io/) bundles, which enables you to manage the 
-lifecycle of your Operator on OLM-enabled clusters. We might discuss this feature in greater detail in a future blog.
+The problem occurs because the mentioned dependency doesn't exist anymore. Though the project actually 
+doesn't need this dependency at this point, it is included by default when bootstrapping a QOSDK project using the 
+`operator-sdk` CLI and allows for automatic generation of 
+[Operator Lifecycle Manager (OLM)](https://olm.operatorframework.io/) bundles. OLM enables you to manage the 
+lifecycle of Operators on clusters in a more principled way. We might discuss this feature in greater detail in a 
+future blog.
+
 Right now, to fix your project, you need to either remove the dependency altogether if you're not interested in the
-feature, or change it to the correct one, as it actually has been renamed to reflect its scope better (the 
-dependency name focused initially on only the 
+feature, or change it to the correct one. This dependency doesn't exist in its previous form anymore because it has 
+been renamed to reflect its expanded scope better: it initially focused solely on the 
 [`ClusterServiceVersion`](https://olm.operatorframework.io/docs/concepts/crds/clusterserviceversion/) 
-part of OLM bundles). The feature was actually disabled using `quarkus.operator-sdk.generate-csv=false` in the 
-`application.properties` file.
+part of OLM bundles but now extends to generating complete bundles.
+The feature was actually disabled using `quarkus.operator-sdk.generate-csv=false` in the `application.properties` file.
 
 The new dependency name is `quarkus-operator-sdk-bundle-generator` so that's what you use if you want to use the 
 OLM generation feature. Note that you will also need to change the associated property name to activate the 
@@ -105,29 +106,55 @@ similar to:
 Looking at what was done, you see that you can actually simplify things even further. It is advising you to add the `io.
 quarkus.platform:quarkus-operator-sdk-bom:pom:3.2.4.Final` dependency. Indeed, QOSDK has been added to the Quarkus 
 platform, making it easier to consume from a given Quarkus version. Switching to this BOM allows you to only decide 
-which version of Quarkus to use and the BOM will make sure you get the appropriate QOSDK version. Previously, you 
-needed to make sure the QOSDK version you imported from the QOSDK BOM was compatible with the Quarkus version you 
-wanted to use. Using the platform QOSDK BOM fixes that issue. However, in that case, you also need to add the 
-Quarkus BOM itself (which was automatically imported for you when you use the QOSDK BOM directly, though you had to 
-manually add the `quarkus.version` property and set it to the correct value in that case).
+which version of Quarkus to use and the BOM will make sure you get the appropriate QOSDK version. 
+
+The project is currently using the QOSDK BOM:
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.quarkiverse.operatorsdk</groupId>
+            <artifactId>quarkus-operator-sdk-bom</artifactId>
+            <version>${quarkus-sdk.version}</version>
+            <scope>import</scope>
+            <type>pom</type>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+ 
+with `quarkus-sdk.version` with the 3.0.4 value. You'll also note that there is a `quarkus.version` property with 
+the 2.7.3.Final value. Looking at the QOSDK BOM, you can see that there's also a Quarkus version property being 
+defined there, with the same `quarkus.version` name. Therefore, if you upgrade the QOSDK version, with the current 
+setup, you need to make sure to also upgrade the Quarkus version in your project in such a way that is compatible 
+with the version defined in the QOSDK BOM. 
+
+Using the QOSDK BOM defined by the Quarkus platform (i.e. using the `io.quarkus.platform:quarkus-operator-sdk-bom` 
+artifact instead of the `io.quarkiverse.operatorsdk:quarkus-operator-sdk-bom`, note the different group identifier), 
+simplifies this aspect by making sure that both QOSDK and Quarkus versions are aligned. The downside of this, though,
+is that by using the QOSDK BOM directly from the QOSDK project, you got the Quarkus BOM automatically included in 
+your project. The price for this, though, as explained above, is that you need to make sure the versions are in synch.
 
 That said, you can also see that it is letting us know that there is a more recent version of the QOSDK extension (6.
-3.0), which isn't however available yet via the Quarkus platform. If you wish to keep using the Quarkus platform, you 
-will use the version that is verified to work with the platform as a whole. That QOSDK version might not be the 
-latest, though. 
+3.0), which will only be available from the Quarkus platform starting with version 3.2.5.Final. Using the Quarkus 
+platform therefore means that you're not necessarily using the latest QOSDK version. This is however the version 
+that is verified to work with the platform as a whole, so this is the more conservative option.
 
-If you wish to use the absolute latest version of QOSDK, you keep the approach of using the BOM provided by QOSDK 
-itself, just making sure to update the Quarkus version using the `quarkus.version`, while updating the QOSDK version 
+If you wish to use the absolute latest version of QOSDK, you should use the BOM provided by QOSDK itself but you 
+will need to make sure to update the Quarkus version using the `quarkus.version`, while updating the QOSDK version 
 using the `quarkus-sdk.version` property in your `pom.xml` file as was previously done. 
 
 Which approach to choose depends on your appetence for risk or how you wish to manage your dependencies. Generally 
 speaking, though, the Quarkus platform is updated frequently and QOSDK versions are usually updated accordingly as 
-needed. That said, patch version updates should work without issues. Moving QOSDK up a minor version from the one 
-proposed by the Quarkus should typically work as well (the project tried to ensure backwards compatibility between 
-minor versions). Upgrading Quarkus to a minor version above (e.g. from 3.2.x to 3.3.x) might prove more tricky, 
-though, as the Fabric8 Kubernetes client version used by that new Quarkus version might also have been updated to a 
-new minor version and these have been known to bring API changes, so you might want to tread carefully with such 
-updates.
+needed so the Quarkus platform is usually up-to-date when it comes to the latest QOSDK version. If you absolutely 
+need the latest QOSDK version, upgrading from what's offered by the Quarkus platform by a patch or even a minor 
+version should typically work with issues as QOSDK strives to maintain backwards compatibility between minor versions.
+ 
+Going the opposite direction, i.e. upgrading Quarkus to a minor version above (e.g. from 3.2.x to 3.3.x) might prove 
+more tricky, though, as the Fabric8 Kubernetes client version used by that new Quarkus version might also have been 
+updated to a new minor version and these have been known to bring API changes, so you might want to tread carefully 
+with such updates.
 
 QOSDK actually issues debug-level warnings when it detects version mismatches (minor version and above, patch 
 level mismatches being considered safe) between Quarkus, JOSDK and Fabric8 Kubernetes client. You can even configure 
@@ -137,7 +164,8 @@ for more details.
 
 ### Adapting to Fabric8 Kubernetes Client changes
 
-If you try to build now, you should get a compilation error, due to an API change in the Fabric8 Kubernetes client:
+Now that the dependencies are sorted out, if you try to build now, you should get a compilation error, due to an API 
+change in the Fabric8 Kubernetes client:
 
 ```java
 [ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.8.1:compile (default-compile) on project expose: Compilation failure
@@ -162,9 +190,9 @@ You should now be all set for the updates: onward to adding status support to yo
 
 Remember that when we discussed how to model custom resources (CR), we mentioned that JOSDK enforces the best 
 practice of separating desired from actual state, each materialized by separate CR fields: `spec` and `status` 
-respectively. Your operator models the desired state by extracting the information specified by the user in the `spec`
-field. However, it fails to report the actual state of the cluster, which is the second part of its contract. That's 
-where the `status` field comes into play.
+respectively. Your Operator currently appropriately models the desired state by extracting the information specified by 
+the user in the `spec` field. It does not, however, report the actual state of the cluster, which is the second part 
+of its contract. That's where the `status` field comes into play.
 
 For reference, here's the 
 [updated code](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-4-init) 
@@ -172,36 +200,35 @@ after the changes made to update what you developed in
 [part 3](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-3) of the
 [https://github.com/halkyonio/exposedapp-rhdblog](https://github.com/halkyonio/exposedapp-rhdblog) repository.
 
-If you haven't started your operator using the Quarkus Dev mode, please do so again (`mvn quarkus:dev` or `quarkus
+If you haven't started your Operator using the Quarkus Dev mode, please do so again (`mvn quarkus:dev` or `quarkus
 dev` if you've installed the [Quarkus CLI](https://quarkus.io/guides/cli-tooling)).
 
 You're going to add two `host` and `message` String fields to your `ExposedAppStatus` class, which we leave as an
 exercise to you, also adding a constructor taking both parameters for good measure (note that you'll still need a 
 default constructor for serialization purposes).
-If the `Ingress` 
-resource has properly been created by 
-your Operator and its status 
-indicates
-that it has been properly handled by the associated controller, you'll update the `message` field to state that the application is indeed exposed and put the
-associated host name to the `host` field. Otherwise, you'll simply set the message to "processing" to let the user
-know that the `ExposedApp` CR has indeed been taken into account. You'll then simply return `UpdateControl.
-updateStatus` passing it your CR with the updated status to let JOSDK know that it needs to send the status change
-to the cluster. Replace the `return UpdateControl.noUpdate();` line in your `reconcile` method by:
+
+If the `Ingress` resource has properly been created by your Operator and its status indicates that it has been 
+properly handled by the associated controller, you'll update the `message` field to state that the application is 
+indeed exposed and put the associated host name to the `host` field. Otherwise, you'll simply set the message to 
+"processing" to let the user know that the `ExposedApp` CR has indeed been taken into account. You'll then simply 
+return `UpdateControl.updateStatus` passing it your CR with the updated status to let JOSDK know that it needs to 
+send the status change to the cluster. Replace the `return UpdateControl.noUpdate();` line in your `reconcile` 
+method by:
 
 ```java,noformat
     final var maybeStatus = ingress.getStatus();
     final var status = Optional.ofNullable(maybeStatus).map(s -> {
-      var result = DEFAULT_STATUS;
-      final var ingresses = s.getLoadBalancer().getIngress();
-      if (ingresses != null && !ingresses.isEmpty()) {
-        // only set the status if the ingress is ready to provide the info we need
-        var ing = ingresses.get(0);
-        String hostname = ing.getHostname();
-        final var url = "https://" + (hostname != null ? hostname : ing.getIp());
-        log.info("App {} is exposed and ready to used at {}", name, url);
-        result = new ExposedAppStatus("exposed", url);
-      }
-      return result;
+        var result = DEFAULT_STATUS;
+        final var ingresses = s.getLoadBalancer().getIngress();
+        if (ingresses != null && !ingresses.isEmpty()) {
+            // only set the status if the ingress is ready to provide the info we need
+            var ing = ingresses.get(0);
+            String hostname = ing.getHostname();
+            final var url = "https://" + (hostname != null ? hostname : ing.getIp());
+            log.info("App {} is exposed and ready to used at {}", name, url);
+            result = new ExposedAppStatus("exposed", url);
+        }
+        return result;
     }).orElse(DEFAULT_STATUS);
 
     exposedApp.setStatus(status);
@@ -211,17 +238,17 @@ to the cluster. Replace the `return UpdateControl.noUpdate();` line in your `rec
 where `DEFAULT_STATUS` is a constant declared as:
 
 ```java
-private static final ExposedAppStatus DEFAULT_STATUS=new ExposedAppStatus("processing", null);
+private static final ExposedAppStatus DEFAULT_STATUS = new ExposedAppStatus("processing", null);
 ```
 
 Once that's done, if you already have an `ExposedApp` on your cluster / namespace, please either modify or re-create 
 it so that you can observe the new behavior of your Operator.
 
 NOTE: It is important to make sure your Operator is running if you delete your CR. By default, JOSDK configures 
-controllers to automatically add 
-[finalizers](https://kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/) to the CRs they handle 
-so that the associated controller has a chance to perform any cleaning operation it might need before the resource 
-is actually deleted. Resources with finalizers are therefore deleted only when all their finalizers are removed by 
+controllers to automatically add a generated
+[finalizer](https://kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/) to the CRs they handle 
+so that the controller has a chance to perform any cleaning operation it might need before the resource is actually 
+deleted. Resources with finalizers are therefore deleted only when all their finalizers are removed by 
 the controllers that added them, thus signaling to Kubernetes that all controllers are OK with the resource being 
 deleted. Of course, a controller can only agree to the resource deletion if it is running. Attempting to delete a 
 resource with a finalizer, associated with a non-running controller, will thus block the deletion until that 
@@ -248,25 +275,73 @@ Status:
 ...
 ```
 
-However, unless there's a problem with your cluster setup, if you wait long enough (usually a matter of a dozen of 
-seconds), you can easily verify that your application is indeed exposed. It doesn't appear, though, that your 
-controller got notified and thus didn't get a chance to update the CR's status.
+However, unless there's a problem with your cluster setup (such as missing an Ingress controller), if you wait long 
+enough (usually a matter of a dozen of seconds), you can easily verify that your application is indeed exposed by 
+examining the `Ingress` resource your Operator created and looking at its status:
 
-Stepping back a little, though, this behavior is completely normal: your controller is only notified of events 
-pertaining to `ExposedApp` resources. In this instance, though, the change that your controller is interested in 
-being notified about occurs on the `Ingress` resource associated with your primary `ExposedApp` resource. Ideally, 
-you'd like your controller to also get notified when some or all of the secondary/dependent resources associated 
-with your primary resource are changed.
+```shell
+kubectl get ingress hello-quarkus -o jsonpath='{.status}'
+```
+
+which should give you something similar to:
+
+```json
+{"loadBalancer":{"ingress":[{"ip":"192.168.1.15"}]}}
+```
+ 
+You can confirm that your application is indeed available at the given address (in our case, opening 
+https://192.168.1.15/hello should return the expected greeting message). 
+
+Depending on the timing of operations on your cluster, it is very likely that the `Ingress` wasn't ready when your 
+controller got called so the status field did not have the information you were looking for at that time. You could 
+loop over some amount of time to hope to catch the status in the right state but that is not the proper way to deal 
+with this issue. How can you deal with this issue? 
+                      
+Let's step back a little. Remember that Kubernetes is built around the notion that controllers are in charge of a 
+given resource kind, that is a controller listens for events pertaining to a specific kind of resources and deal 
+with these as they come. By default, then controllers only worry about one kind of resources: the one they're 
+supposed to handle. This is also the case for JOSDK and QOSDK: by default, your controller is associated with its 
+primary resource kind (usually, your Custom Resource, `ExposedApp` in this example). The behavior you're seeing is 
+therefore completely expected. 
+
+However, it is often the case that a controller needs to also reconcile their primary resources whenever events 
+occur on other secondary/dependent resources associated with the primary resources. For example, the `Deployment` 
+controller needs to be informed whenever events occur on associated `Pods` so that it can react accordingly. In your 
+sample Operator, your controller needs to be notified of `Ingress` (a secondary resource) events so that it can 
+update the associated `ExposedApp` (primary resource) accordingly.
 
 JOSDK takes care of this problem by introducing the 
 [event source concept](https://javaoperatorsdk.io/docs/features#handling-related-events-with-event-sources). 
-An event source (an implementation of the 
-`EventSource` interface in JOSDK) represents a source of events associated with a given CR type. For the 
-`ExposedApp` controller, you want an event source associated with `Ingress` resources, not just any such resources, 
-but ones with the label that you added to your secondary resources so that your controller won't get notified of 
-events on `Ingress` resources that have nothing to do with our `ExposedApp` CRs. By associating such an event source 
-to your controller, JOSDK will take care of calling your controller whenever events occur on secondary resources 
-associated with your primary `ExposedApp` resources.
+An event source (an implementation of the`EventSource` interface in JOSDK) represents a source of events that can 
+somehow be mapped to a CR with the purpose of triggering the associated controller. Whenever the `EventSource` 
+triggers an event, it needs to do so in such a way that it identifies which CR is supposed to be associated with 
+that event so that JOSDK can trigger the related controller.
+
+For the `ExposedApp` controller, you want an event source associated with `Ingress` resources. Ideally, you'd want 
+to only get events related to `Ingress` resources that were created by our controller, not all `Ingress` resources 
+that might exist in the cluster as you don't really care about them, which you can accomplish by filtering these 
+events based on a [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/). By 
+associating such an event source to your controller, JOSDK will take care of calling your controller whenever events 
+occur on secondary resources associated with your primary `ExposedApp` resources.
+
+In order to be able to filter events, you will add the recommended `app.kubernetes.io/managed-by` label to the 
+secondary resources managed by your controller by modifying your `reconcile` method to add that label to the 
+`labels` map that is passed to the `createMetadata` method:
+
+```java
+final var labels=Map.of(
+        APP_LABEL, exposedApp.getMetadata().getName(),
+        MANAGED_BY_KEY, MANAGED_BY_VALUE);
+```
+
+where `MANAGED_BY_KEY` and `MANAGED_BY_VALUE` are defined as follows, also defining the `MANAGED_BY_SELECTOR` you 
+will use to filter the events at the same time:
+
+```java
+static final String MANAGED_BY_KEY = "app.kubernetes.io/managed-by";
+static final String MANAGED_BY_VALUE = "exposedapp-controller";
+static final String MANAGED_BY_SELECTOR = MANAGED_BY_KEY + "=" + MANAGED_BY_VALUE;
+```
 
 JOSDK provides 
 [several `EventSource` implementations](https://javaoperatorsdk.io/docs/features#built-in-eventsources) out of the 
@@ -274,9 +349,8 @@ box to cover common use cases, some dealing with watching events on Kubernetes r
 allow controllers to react to events happening outside of the cluster, which is a really powerful feature.
  
 Let's start with a very low-level event source implementation so that you can take a peak at how JOSDK handles 
-events. You will implement a
-[Fabric8 client `Watcher`](https://github.com/fabric8io/kubernetes-client/blob/main/kubernetes-client-api/src/main/java/io/fabric8/kubernetes/client/Watcher.java)
-based `EventSource`:
+events. You will implement an `EventSource` based on a 
+[Fabric8 client `Watcher`](https://github.com/fabric8io/kubernetes-client/blob/main/kubernetes-client-api/src/main/java/io/fabric8/kubernetes/client/Watcher.java):
 
 ```java
 public static class IngressEventSource implements EventSource, Watcher<Ingress> {
@@ -317,21 +391,20 @@ public static class IngressEventSource implements EventSource, Watcher<Ingress> 
 Let's look at the details. First, quite logically, your `EventSource` needs to implement the 
 [`EventSource` interface](https://github.com/operator-framework/java-operator-sdk/blob/main/operator-framework-core/src/main/java/io/javaoperatorsdk/operator/processing/event/source/EventSource.java)
 which means that you have to implement 3 methods: `setEventHandler` (the only one we care about here), `start` and 
-`stop`, these last two being only needed if you need to have code that runs whenever the associated reconciler 
+`stop`, these last two being only useful if you need to have code that runs whenever the associated reconciler 
 starts or stops, which you don't need to worry about here. The `setEventHandler` method will be called automatically 
-by the SDK when your event source gets registered and will provide an 
+by the SDK when your event source gets registered. JOSDK will call it, providing an 
 [`EventHandler`](https://github.com/operator-framework/java-operator-sdk/blob/main/operator-framework-core/src/main/java/io/javaoperatorsdk/operator/processing/event/EventHandler.java)
-instance that your event source can use to ask JOSDK to potentially trigger your reconciler as you will see. 
+instance that your event source can use to ask JOSDK to potentially trigger your reconciler. 
 Typically, you only need to record that instance so that your event source can refer to it when needed. Note that 
 all this is fairly common to all `EventSource` implementations and, recognizing this, JOSDK provides an 
-`AbstractEventSource` class that takes care of these details (you could have used this but we wanted to stay at the 
-lowest abstract level possible first). 
+`AbstractEventSource` class that takes care of these details. 
 
-Next, your event source needs to implement the `Watcher` interface, meaning that the Fabric8 
-client will call your `EventSource` `eventReceived` method whenever an event occurs for `Ingress` events. You want 
-to trigger the reconciler only if the `Ingress` has a status and that it contains the information you need to 
-extract the address at which the application will be exposed (which can be extracted from the `status.loadBalancer.
-ingress` field). 
+Next, your event source needs to implement the `Watcher` interface, meaning that the Fabric8 client will call your 
+`EventSource` `eventReceived` method whenever an event, that matches your `Watcher` configuration, occurs for `Ingress` 
+events. You want to trigger the reconciler only if the `Ingress` has a status and that it contains the information 
+you need to extract the address at which the application will be exposed (which can be extracted from the 
+`status.loadBalancer.ingress` field, as you saw above). 
 
 Assuming this condition is satisfied, you then need to identify which of your CRs should be 
 associated with that event so that the SDK can retrieve it and trigger your reconciler with it. In this case, 
@@ -349,13 +422,15 @@ sources to get notified whenever events occur that it needs to handle. `prepareE
 uses is to learn which event sources your reconciler requires, each associated with a unique name identifying it 
 (which is why the method returns a `Map`).
 
-In your case, you still need to do two things. First, tell Fabric8 to start watching `Ingress` events, letting it know 
+In your case, you still need to do two things. First, tell Fabric8 to start watching `Ingress` events, but 
+only the ones that match the specified label selector you defined earlier, letting it know 
 that it should call your event source. To do this, implement the following method:
 
 ```java
   public static IngressEventSource create(KubernetesClient client) {
         final var eventSource = new IngressEventSource();
-        client.network().v1().ingresses().watch(eventSource);
+        final var options = new ListOptionsBuilder().withLabelSelector(MANAGED_BY_SELECTOR).build();
+        client.network().v1().ingresses().watch(options ,eventSource);
         return eventSource;
     }
 ```
@@ -367,14 +442,14 @@ The second thing you need to do is to implement the `prepareEventSources` method
 ```java
     @Override
     public Map<String, EventSource> prepareEventSources(EventSourceContext<ExposedApp> eventSourceContext) {
-        return Map.of("ingress-event-source",IngressEventSource.create(eventSourceContext.getClient()));
+        return Map.of("ingress-event-source", IngressEventSource.create(eventSourceContext.getClient()));
     }
 ```
 
-That should do it. If you left your operator running using Quarkus Dev Mode while writing the code, it should 
+That should do it. If you left your Operator running using Quarkus Dev Mode while writing the code, it should 
 restart and, if you delete your CR and re-create it, after a while, you should see more logging happening in the 
-console, seeing that your reconciler is actually called several times, each time an event that the SDK thinks might 
-be of interest to it happens. After a few seconds, the condition you're waiting for should happen and the reconciler 
+console, seeing that your reconciler is actually called several times, each time an event, that the SDK thinks might 
+be of interest, happens. After a few seconds, the condition you're waiting for should happen and the reconciler 
 should log the address at which your app is now available. If you check your CR, using 
 
 ```shell
@@ -402,7 +477,7 @@ Status:
 Events:     <none>
 ```
 
-That was quite a bit of work, even though JOSDK takes care of lots of details for you already. However, this code 
+That was quite a bit of work, even though JOSDK takes care of lots of the details already. However, this code 
 leaves a lot to desire in terms of error handling, for example. Luckily, JOSDK provides an `EventSource` 
 implementation that is optimized to handle Kubernetes resources, based on Fabric8's
 [`SharedInformer`](https://github.com/fabric8io/kubernetes-client/blob/main/doc/CHEATSHEET.md#sharedinformers) which 
@@ -414,22 +489,23 @@ All the work you did above could be replaced by only the following code:
 ```java
 @Override
 public Map<String,EventSource> prepareEventSources(EventSourceContext<ExposedApp> eventSourceContext) {
-    return EventSourceInitializer.nameEventSources(new InformerEventSource<>(InformerConfiguration.from(Ingress.class).build(), eventSourceContext));
+    final var config = InformerConfiguration.from(Ingress.class).withLabelSelector(MANAGED_BY_SELECTOR).build();
+    return EventSourceInitializer.nameEventSources(new InformerEventSource<>(config, eventSourceContext));
 }
 ```
 
 even asking JOSDK to generate a name automatically for your event source. The only thing that's needed is to 
-configure it to listen to `Ingress` events, though a lot more can be configured, if needed, using: 
-`InformerConfiguration.from(Ingress.class).build()`.
+configure it to listen to `Ingress` events, matching the desired label selector, using: 
+`InformerConfiguration.from(Ingress.class).withLabelSelector(MANAGED_BY_SELECTOR).build()`.
 
 ## Conclusion
  
-This concludes part 4 of our seriesl. You've covered quite a bit of ground, looking at how to upgrade your code to the 
+This concludes part 4 of our series. You've covered quite a bit of ground, looking at how to upgrade your code to the 
 latest versions of Quarkus and JOSDK but also scratching the surface of what can be accomplished using event sources 
 so that your Operator can react to multiple, varied conditions, both affecting Kubernetes resources but also, though 
 this didn't get covered here, external resources.
 
-You implemented an `EventSource` from scratch first and then used one of the bundled implementations, 
+You implemented an `EventSource` from scratch first and then used one of the powerful bundled implementations, 
 `InformerEventSource` optimized to deal with common patterns used when dealing with Kubernetes resources. However, 
 your reconciler is still very simple and doesn't deal very well with error conditions and is not optimized as the 
 secondary resources it needs are always created and sent to the cluster even though this isn't always needed. In the 
