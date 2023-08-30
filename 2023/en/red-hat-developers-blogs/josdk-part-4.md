@@ -195,10 +195,8 @@ the user in the `spec` field. It does not, however, report the actual state of t
 of its contract. That's where the `status` field comes into play.
 
 For reference, here's the 
-[updated code](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-4-init) 
-after the changes made to update what you developed in
-[part 3](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-3) of the
-[https://github.com/halkyonio/exposedapp-rhdblog](https://github.com/halkyonio/exposedapp-rhdblog) repository.
+[updated code](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-3-updated) 
+after the updates performed in the previous section.
 
 If you haven't started your Operator using the Quarkus Dev mode, please do so again (`mvn quarkus:dev` or `quarkus
 dev` if you've installed the [Quarkus CLI](https://quarkus.io/guides/cli-tooling)).
