@@ -509,4 +509,9 @@ your reconciler is still very simple and doesn't deal very well with error condi
 secondary resources it needs are always created and sent to the cluster even though this isn't always needed. In the 
 next part, we will see how JOSDK could help with this situation.
 
+For reference, you can find the completed code for this part under the
+[`part-4` tag](https://github.com/halkyonio/exposedapp-rhdblog/tree/part-4)
+of the
+[https://github.com/halkyonio/exposedapp-rhdblog](https://github.com/halkyonio/exposedapp-rhdblog) repository.
+
 
