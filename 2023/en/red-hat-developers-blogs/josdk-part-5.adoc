@@ -1,4 +1,4 @@
-= Writing Kubernetes Operators in Java with JOSDK, Part 5: Dependent Resources
+= Writing Kubernetes Operators in Java with JOSDK, Part 5: Event Sources
 
 https://javaoperatorsdk.io[Java Operator SDK], or JOSDK, is an open source project that aims to simplify the task of
 creating Kubernetes Operators using Java. The project was started
