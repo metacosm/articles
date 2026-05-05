@@ -15,7 +15,7 @@ QOSDK, facilitates the development experience by taking care of managing the Cus
 automatically.
 The https://developers.redhat.com/articles/2022/04/04/writing-kubernetes-operators-java-josdk-part-3-implementing-controller[third article]
 focused on what's required to implement the reconciliation logic, while
-[part four](**** TODO: INSERT LINK TO PART 4****)
+https://developers.redhat.com/articles/2023/09/19/write-operators-java-josdk-part-4-upgrading-strategies#strategies_for_qosdk_and_quarkus_updates[part four]
 focused on updating the code to use recent versions of Quarkus, JOSDK and QOSDK.
 
 == Where things stand
