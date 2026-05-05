@@ -23,14 +23,14 @@ focused on updating the code to use recent versions of Quarkus, JOSDK and QOSDK.
 Your updated Operator exposes your application outside the cluster via an `Ingress`, creating the
 associated `Deployment` and `Service` along the way. However, while this simplified exposing the application, you
 still need to know *where* to access the application or how to find that information! Similarly, it might take
-some time for the cluster to achieve the desired state. In the mean time, users are left wondering if things are
+some time for the cluster to achieve the desired state. In the meantime, users are left wondering if things are
 working correctly.
 
 If you recall properly, you added labels to the components your Operator created. While you could indeed use these
 labels to check on the status of your application and its components, wouldn't it be nicer if you could simply
 interact with the API we created? Our goal, developing this Operator, is, after all, to simplify interacting with the
 cluster… From this perspective, your Operator only fulfills one part of its contract because it doesn't properly
-encapsulates the complexity of dealing with the cluster. How could you fix this problem?
+encapsulate the complexity of dealing with the cluster. How could you fix this problem?
 
 For reference, here is the
 https://github.com/halkyonio/exposedapp-rhdblog/tree/part-4[code as it stands] after part 4.
