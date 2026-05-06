@@ -1,0 +1,98 @@
+= Challenges & perspectives Measuring software power consumption
+
+== A warming world
+
+Green-house gases (GHG), emitted by our industrial processes and everyday energy requirements, keep accumulating in our atmosphere, trapping heat from the sun, gradually warming our world. The evolution of global temperatures is quite unequivocal: our world is warming up at quite a frightening pace.
+
+.Evolution of global temperatures from 1850 to 2025
+[#img-global-temp-change,link=https://showyourstripes.info/c/globe]
+image::global-temp-change.png[Evolution of global temperatures 1850 - 2025]
+
+Successive Conference of the Parties (the famous COPs) have tried to address the issue since 1995 with the Kyoto protocol and the Paris agreement to try and limit the global warming to below 1.5ºC compared to pre-industrial levels in order to mitigate potentially dramatic consequences. While there are encouraging progress, GHG emissions must still be curbed if we wish to respect the Paris agreement: the remaining budget to stay under 1.5ºC increase in temperature is 170 GtCO2, equivalent to 4 years at the 2025 emissions level, according to the https://globalcarbonbudget.org/[Global Carbon Project].
+
+.Global fossil CO2 emissions since 1990
+[#img-emissions,link=https://robbieandrew.github.io/GCB2025/]
+image::emissions.png[Global fossil CO2 emissions since 1990]
+
+== The impact of Information & Communication Technologies (ICT)
+
+[quote,GreenIT's 2025 Environmental footprint of the digital world report]
+In 2023, global digital technology accounts for 3.4% of global GHG emissions.
+
+Contrary to what the term "dematerialization” evokes, digital technology is very material. Significant amounts of resources are required both to produce the equipment required but also to run it and the impacts are wide and large on the environment. Estimates put the global impact of ICT at 3.4% of global GHG emissions, or about 5.5 times those of France, per https://greenit.eco/wp-content/uploads/2025/05/greenit-world-study-2025-20250417.pdf[GreenIT's 2025 3rd Environmental footprint of the digital world report]. Generative artificial intelligence already accounts for over 4% of these emissions and its share is increasing sharply. It's also worth noting that, while we focus here on energy consumption, the impact of ICTs is felt far and wide at different levels: water usage, local temperature increases, metals and minerals consumption, noise, health impacts, human exploitation, conflicts, etc.
+
+Companies in the ICT field have therefore a major role to play to ensure that our planet stays under the allowable carbon budget to meet the Paris agreement goals. Any GHG emission that can be avoided by ICT companies will help. However, these companies also need help to first assess what they need to do and then be able to act upon these goals.
+
+== Prevent, Reduce, Reuse, Recycle
+
+There are, of course, steps that can be taken at several levels by companies to improve their carbon footprint and behaviors inherited from more material-heavy industries can also make sense in the ICT domain. As such, the https://en.wikipedia.org/wiki/Waste_hierarchy["Prevent, Reduce, Reuse, Recycle" waste management hierarchy] should be followed. The biggest lever ("Prevent") relies on careful consideration of what's actually needed and useful: indeed, for this purpose, the best GHG emission is the one that doesn't exist in the first place. If a piece of software doesn't need to run, then it probably shouldn't run. Redundancy is also costly when it can be avoided and confidence in processes (such as continuous deployment) and architecture can have tremendous impacts on avoiding potential GHG emissions. Similarly, making sure that software runs efficiently on existing hardware is also important because a significant amount of emissions comes from hardware renewals.
+
+Seen in that light, a pattern starts to emerge: many of the processes and schemes that are beneficial to reducing GHG emissions can also be understood as significant monetary savings: reducing resource requirements is not only good for the planet, it's also good for your wallet! In parallel, companies often derive second-order benefits: better brand image, competitive advantage, etc. Users also benefit because lower resource requirements to run the software often result in better usability and inclusivity by allowing a wider population to access the software. Finally, legislations are increasingly tight in several geographies (Europe being one, for example), meaning that assessing and reducing GHG emissions might become legal obligations for companies operating in these territories.
+
+Reducing impact, though, is a tricky proposition for software. Dealing with concrete waste such as amounts of steel or fabric is somewhat straightforward, if maybe overly simplified as modern supply chains are quite complex: you know how much raw material you need to build an item and can try to come up with new designs that reduce that amount. For software, the externalities are a lot more nebulous, especially when, pun intended, said software runs in the "cloud"!
+
+== Measure to act
+
+[quote,William Edwards Demming]
+Without data, you're just another person with an opinion
+
+Once avoidable emissions are indeed avoided, ICT companies are left with the arduous task of measuring emissions of what's left. Indeed, in order to alleviate said emissions, companies first need to be able to understand where they're coming from but, also, and maybe more importantly, measure them. Without measures, it would be quite difficult to assess progress or if developments are trending in the right direction.
+
+=== From energy consumption to GHG emissions?
+
+GHG -> CO2
+Missing link to get from energy consumption to carbon
+Lack of real time electricity mix / carbon intensity information
+Cloud providers opacity
+So: focus on energy consumption
+
+== Why involve developers?
+
+It is a well-known adage in the software business that the later in a product's lifecycle, the more costly it is to make changes. If your application has a functioning carbon budget, it becomes important to assess its performance on that metric as early as possible. Developers are empowered to make power-aware design decisions (algorithm, framework choices) when they are able to measure the energy consumption of an application as it is being developed. It allows to see the impact of different implementations and balance the tradeoffs of differing solutions.
+
+== Measuring software power consumption
+
+Accurate power measurement
+
+Granular up to method level
+
+Relevance Statistical Representativity
+
+Platform independence (meet users where they are)
+
+Lightweight Observer vs. observation
+
+Historical data for comparison purposes
+
+Great developer experience
+
+Tie with observability
+
+Tie with profiling
+
+== Software powermeters state of the art
+
+Why existing power meters are not appropriate for our use
+
+== `power-server` and `quarkus-power`
+
+Goals
+
+Architecture
+
+Implementation
+
+Limitations
+
+* Linux
+* macOS
+
+== Conclusions
+
+ICTs carbon impact is significant and growing
+
+Applications need to take sustainability into account
+
+Measuring is complex
+
+Carbon impact is only part of the story
