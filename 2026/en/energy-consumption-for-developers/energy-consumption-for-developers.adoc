@@ -67,8 +67,6 @@ Based on this initial assessment, we set out to implement a system that could fu
 
 The server publishes metadata about the available platform sensors and streams measures as they come in. The metadata allows client software (i.e. any piece of software interested in the energy consumption measures) to make sense of the streamed data, intentionally kept as minimal as possible to limit the impact. We chose a REST implementation, leveraging established standards, to make it easy for client applications to connect the power measuring server, thus enabling a wide variety of applications, in a language- and framework-agnostic way.
 
-One such application that we had in mind was to provide a https://github.com/metacosm/quarkus-power[`quarkus-power` Quarkus extension] that would help Quarkus application developers to monitor the power consumption of their app as it's being developed. For that purpose, the extension integrates with Quarkus' Dev mode and provide Quarkus Dev console commands to start and stop power measurement. It also provides specific Dev UI components to display the results. Finally, it defines a `@PowerMeasure` annotation that developers can add to their classes or methods to scope the power measure to that specific element.
-
 This server part of the architecture is implemented in the https://github.com/metacosm/power-server[`power-server`] project. This is a https://quarkus.io[Quarkus] application that aims to be as efficient as possible, though heavy optimization hasn't taken place at this point as we first focus on ensuring data validity first.
 
 === Power sensors
@@ -90,6 +88,42 @@ In particular, this requires read access to files located in the `/sys/class/pow
 Each platform "sensor" implementation reports the data in the same format, along with associated metadata as detailed above. However, some coordination work is still required. This is the role of the sampling mechanism (henceforth referred to as sampler) that controls how often the sensors are probed and takes care of computing energy measures based on the sensor data and metadata. Moreover, since some implementations do not attribute the share of the global power consumption to specific processes, the sampler also maintains a parallel sampling of the CPU share for each process of interest. More specifically, the sampler takes care of merging the two data streams (power measures, CPU usage) into a coherent stream if required so that power consumption can be properly imputed to processes under observation.
 
 To measure an application's power consumption, one would thus request the sampler to start monitoring a given set of processes, starting the power sensors or CPU usage sampler as required. The measures are then recorded in an embedded SQLite database using https://github.com/roastedroot/sqlite4j[SQLite4J] using application and session identifiers to satisfy the requirement of being able to compare different runs of the same application. One can also ask the persistence layer to aggregate the data for such a combination of application / session to get an easy measure of the power consumption for a given session. The measure stream can also be pulled by a REST server to republish the data externally.
+
+Below is an overview of the `power-server` architecture: the core component is the `SamplingMeasurer`, which gets a `PowerSensor` instance injected, depending on the underlying platform. The sensor produces a stream of `Measures`, that the sampler exploits and records via the `Persistence` instance (which is configurable but right now only has one implementation as described above). The `SamplingMeasurer` is then driven by `PowerResource`, which implements the REST endpoint or `Power`, which is a Command-Line Interface (CLI) tool that we describe below.
+
+.power-server architecture
+[#power-server-architecture]
+image::power-server-architecture.png[`power-server` architecture]
+
+=== Quarkus extension
+
+One application of this platform-agnostic, power-measuring backend that we had in mind was to provide a https://github.com/metacosm/quarkus-power[`quarkus-power` Quarkus extension] that would help Quarkus application developers to monitor the power consumption of their app as it's being developed. For that purpose, the extension integrates with Quarkus' Dev mode and provide Dev UI components to start, stop and display power measures, as shown below:
+
+.Dev UI component to start and display power measures
+[#quarkus-power-control]
+image::measure-control-screen.png[Dev UI component to start and display power measures]
+
+As you can see, the UI displays the system metadata from the sensor, along with recorded measures. You can see that these are color-coded depending on the relative power consumption of the application as it's running. In this example, we asked the application to perform more intensive computations about midway through the measures and the measure bars reflect that, turning red from green. We used the following code:
+
+[source,java]
+----
+@PowerMeasure(name = "fibonacci")
+int fibonacci(int n) {
+    return fib(n);
+}
+
+static int fib(int n) {
+    if (n <= 1) return n;
+    return fib(n - 1) + fib(n - 2);
+}
+----
+
+The extension defines a `@PowerMeasure` annotation that developers can add to their classes or methods to scope the power measure to that specific element. The UI provides a way to look at these measures as well as shown below:
+
+.Showing power consumption for annotated methods
+[#quarkus-power-methods]
+image:method.png[Showing power consumption for annotated methods]
+
 
 == Current status
 
