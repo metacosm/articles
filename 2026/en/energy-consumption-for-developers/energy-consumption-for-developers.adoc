@@ -1,6 +1,10 @@
 = Measuring software power consumption: challenges & perspectives
 Christophe Laprun <claprun@ibm.com>
 
+[abstract]
+.Abstract
+Information & Communication Technologies currently account for 3.4% of global green-house gas emissions. This share, fueled by increased usage and AI, keeps increasing. These emissions are driven by the energy demands of applications and the infrastructure they require. We posit that, for ICT companies to decrease their emissions, developers need to be involved so that energy consumption of applications can be taken into account as early as possible in a software's lifecycle. In this article, we offer an account of some of the work we've been doing in this area, along with the associated challenges and perspectives.
+
 == A warming world
 
 Green-house gases (GHG), emitted by our industrial processes and everyday energy requirements, keep accumulating in our atmosphere, trapping heat from the sun, gradually warming our world. The evolution of global temperatures is quite unequivocal: our world is warming up at quite a frightening pace, with potentially dramatic consequences.
